@@ -1,0 +1,3795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  />
+
+  <title>DevTeam-Hub — Master Design Documentation</title>
+
+  <style>
+    /* =========================================================
+       DEVTEAM-HUB — MASTER DESIGN DOCUMENTATION
+       ========================================================= */
+
+    :root {
+      --canvas: #f8fafc;
+      --white: #ffffff;
+
+      --border: #e2e8f0;
+      --border-dark: #cbd5e1;
+
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --text-light: #94a3b8;
+
+      --teal: #0d9488;
+      --teal-dark: #0f766e;
+      --teal-light: #ccfbf1;
+      --teal-soft: #f0fdfa;
+
+      --dark-red: #881337;
+      --dark-red-light: #ffe4e6;
+
+      --blue: #2563eb;
+      --blue-light: #dbeafe;
+
+      --green: #16a34a;
+      --green-light: #dcfce7;
+
+      --yellow: #ca8a04;
+      --yellow-light: #fef9c3;
+
+      --shadow-sm:
+        0 1px 2px rgba(15, 23, 42, 0.05);
+
+      --shadow:
+        0 10px 30px rgba(15, 23, 42, 0.08);
+
+      --shadow-lg:
+        0 20px 60px rgba(15, 23, 42, 0.15);
+
+      --radius-sm: 8px;
+      --radius: 14px;
+      --radius-lg: 20px;
+
+      --transition:
+        180ms ease;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family:
+        Inter,
+        ui-sans-serif,
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+
+      background: var(--canvas);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    body.preview-open {
+      overflow: hidden;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    button,
+    input,
+    textarea,
+    select {
+      font: inherit;
+    }
+
+    /* =========================================================
+
+
+    HEADER
+       ========================================================= */
+
+    .site-header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
+    }
+    .header-inner {
+      width: min(1500px, calc(100% - 40px));
+      margin: 0 auto;
+      min-height: 76px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 13px;
+      min-width: 0;
+    }
+    .brand-icon {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      background: var(--teal);
+      color: white;
+      border-radius: 11px;
+      font-size: 20px;
+      font-weight: 800;
+      box-shadow:
+        0 8px 20px rgba(13, 148, 136, 0.2);
+    }
+    .brand-text h1 {
+      font-size: 19px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+    .brand-text p {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .header-badges {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: white;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
+    }
+
+    .badge.teal {
+      color: var(--teal-dark);
+      background: var(--teal-soft);
+      border-color: #99f6e4;
+    }
+
+    .badge.red {
+      color: var(--dark-red);
+      background: #fff1f2;
+      border-color: #fecdd3;
+    }
+
+    /* =========================================================
+       HERO
+       ========================================================= */
+
+    .hero {
+      position: relative;
+      overflow: hidden;
+
+      padding: 78px 20px 70px;
+
+      background:
+        radial-gradient(
+          circle at 15% 20%,
+          rgba(13, 148, 136, 0.08),
+          transparent 28%
+        ),
+        radial-gradient(
+          circle at 85% 20%,
+          rgba(136, 19, 55, 0.06),
+          transparent 28%
+        ),
+        linear-gradient(
+          180deg,
+          #ffffff 0%,
+          #f8fafc 100%
+        );
+
+      border-bottom: 1px solid var(--border);
+    }
+
+    .hero::before {
+      content: "";
+
+      position: absolute;
+      inset: 0;
+
+      opacity: 0.35;
+      pointer-events: none;
+
+      background-image:
+        linear-gradient(
+          rgba(15, 23, 42, 0.04) 1px,
+          transparent 1px
+        ),
+        linear-gradient(
+          90deg,
+          rgba(15, 23, 42, 0.04) 1px,
+          transparent 1px
+        );
+
+      background-size: 40px 40px;
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 1;
+
+      width: min(1050px, 100%);
+      margin: 0 auto;
+
+      text-align: center;
+    }
+
+    .hero-kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+
+      padding: 7px 13px;
+
+      border-radius: 999px;
+
+      color: var(--teal-dark);
+      background: var(--teal-soft);
+      border: 1px solid #99f6e4;
+
+      font-size: 12px;
+      font-weight: 800;
+
+      margin-bottom: 20px;
+    }
+
+    .hero h2 {
+      font-size: clamp(34px, 5vw, 62px);
+      line-height: 1.05;
+
+      letter-spacing: -0.045em;
+
+      max-width: 900px;
+      margin: 0 auto 20px;
+    }
+
+    .hero h2 span {
+      color: var(--teal);
+    }
+
+    .hero-description {
+      max-width: 780px;
+      margin: 0 auto;
+
+      font-size: 17px;
+      color: var(--text-muted);
+    }
+
+    .hero-stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+
+      width: min(900px, 100%);
+      margin: 40px auto 0;
+
+      background: white;
+
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+
+      box-shadow: var(--shadow);
+
+      overflow: hidden;
+    }
+
+    .hero-stat {
+      padding: 18px;
+      border-right: 1px solid var(--border);
+    }
+
+    .hero-stat:last-child {
+      border-right: none;
+    }
+
+    .hero-stat strong {
+      display: block;
+
+      font-size: 25px;
+      font-weight: 800;
+
+      color: var(--teal-dark);
+    }
+
+    .hero-stat span {
+      display: block;
+
+      margin-top: 2px;
+
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    /* =========================================================
+       MAIN CONTAINER
+       ========================================================= */
+
+    .container {
+      width: min(1500px, calc(100% - 40px));
+      margin: 0 auto;
+    }
+
+    main {
+      padding: 60px 0 80px;
+    }
+
+    /* =========================================================
+       SECTION HEADINGS
+       ========================================================= */
+
+    .section-heading {
+      margin-bottom: 22px;
+    }
+
+    .section-number {
+      display: inline-flex;
+      align-items: center;
+
+      width: 30px;
+      height: 30px;
+
+      justify-content: center;
+
+      background: var(--teal);
+      color: white;
+
+      border-radius: 9px;
+
+      font-size: 12px;
+      font-weight: 800;
+
+      margin-bottom: 9px;
+    }
+
+    .section-heading h2 {
+      font-size: 28px;
+      letter-spacing: -0.025em;
+      margin-bottom: 5px;
+    }
+
+    .section-heading p {
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    /* =========================================================
+       PERMISSION MATRIX
+       ========================================================= */
+
+    .permission-section {
+      margin-bottom: 65px;
+    }
+
+    .table-wrapper {
+      overflow-x: auto;
+
+      background: white;
+
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+
+      box-shadow: var(--shadow-sm);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 760px;
+    }
+
+    th,
+    td {
+      padding: 15px 17px;
+
+      text-align: left;
+
+      border-bottom: 1px solid var(--border);
+
+      font-size: 13px;
+    }
+
+    th {
+      background: #f8fafc;
+
+      color: var(--text-muted);
+
+      font-size: 11px;
+      text-transform: uppercase;
+
+      letter-spacing: 0.06em;
+    }
+
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    .role-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+
+      padding: 5px 9px;
+
+      border-radius: 999px;
+
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .role-label.guest {
+      background: #f1f5f9;
+      color: #475569;
+    }
+
+    .role-label.member {
+      background: var(--teal-light);
+      color: var(--teal-dark);
+    }
+
+    .role-label.admin {
+      background: var(--dark-red-light);
+      color: var(--dark-red);
+    }
+
+    .allowed {
+      color: var(--green);
+      font-weight: 800;
+    }
+
+    .restricted {
+      color: var(--dark-red);
+      font-weight: 700;
+    }
+
+    /* =========================================================
+       UI DOCUMENTATION
+       ========================================================= */
+
+    .ui-doc {
+      margin-bottom: 70px;
+    }
+
+    .ui-grid {
+      display: grid;
+
+      grid-template-columns:
+        minmax(0, 1.05fr)
+        minmax(0, 0.95fr);
+
+      gap: 28px;
+
+      align-items: start;
+    }
+
+    /* =========================================================
+       MOCKUP IMAGE CARD
+       ========================================================= */
+
+    .mockup-card {
+      background: white;
+
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+
+      box-shadow: var(--shadow);
+
+      overflow: hidden;
+    }
+
+    .mockup-card-header {
+      min-height: 58px;
+
+      padding: 13px 17px;
+
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+
+      gap: 12px;
+
+      border-bottom: 1px solid var(--border);
+
+      background:
+        linear-gradient(
+          180deg,
+          #ffffff,
+          #f8fafc
+        );
+    }
+
+    .mockup-card-header strong {
+      font-size: 13px;
+    }
+
+    .mockup-card-header span {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .image-frame {
+      position: relative;
+
+      min-height: 390px;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      overflow: hidden;
+
+      background:
+        linear-gradient(
+          135deg,
+          #f8fafc,
+          #eef2f7
+        );
+
+      cursor: zoom-in;
+    }
+
+    .image-frame img {
+      display: block;
+
+      width: 100%;
+      height: auto;
+
+      max-height: 650px;
+
+      object-fit: contain;
+
+      transition:
+        transform 250ms ease,
+        filter 250ms ease;
+    }
+
+    .image-frame:hover img {
+      transform: scale(1.015);
+    }
+
+    /* =========================================================
+       IMAGE PREVIEW BUTTON
+       ========================================================= */
+
+    .image-preview-trigger {
+      position: absolute;
+
+      left: 50%;
+      bottom: 18px;
+
+      transform:
+        translateX(-50%)
+        translateY(8px);
+
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+
+      padding: 10px 15px;
+
+      border: 1px solid rgba(255, 255, 255, 0.75);
+      border-radius: 999px;
+
+      background: rgba(15, 23, 42, 0.86);
+      color: white;
+
+      box-shadow:
+        0 8px 24px rgba(15, 23, 42, 0.25);
+
+      font-size: 12px;
+      font-weight: 800;
+
+      cursor: pointer;
+
+      opacity: 0;
+
+      transition:
+        opacity var(--transition),
+        transform var(--transition),
+        background var(--transition);
+    }
+
+    .image-frame:hover .image-preview-trigger,
+    .image-preview-trigger:focus-visible {
+      opacity: 1;
+
+      transform:
+        translateX(-50%)
+        translateY(0);
+    }
+
+    .image-preview-trigger:hover {
+      background: var(--teal-dark);
+    }
+
+    .image-preview-trigger:focus-visible {
+      outline: 3px solid rgba(13, 148, 136, 0.35);
+      outline-offset: 2px;
+    }
+
+    .preview-icon {
+      font-size: 15px;
+      line-height: 1;
+    }
+
+    /* =========================================================
+       IMAGE FALLBACK
+       ========================================================= */
+
+    .image-placeholder {
+      display: none;
+
+      width: 100%;
+      min-height: 390px;
+
+      padding: 40px;
+
+      text-align: center;
+
+      color: var(--text-muted);
+    }
+
+    .placeholder-icon {
+      width: 65px;
+      height: 65px;
+
+      display: grid;
+      place-items: center;
+
+      margin: 0 auto 16px;
+
+      border-radius: 18px;
+
+      background: var(--teal-soft);
+      color: var(--teal);
+
+      font-size: 27px;
+    }
+
+    .image-placeholder strong {
+      display: block;
+
+      margin-bottom: 5px;
+
+      color: var(--text);
+    }
+
+    .image-placeholder p {
+      font-size: 12px;
+      max-width: 350px;
+      margin: auto;
+    }
+
+    /* =========================================================
+       DESCRIPTION CARD
+       ========================================================= */
+
+    .details-card {
+      background: white;
+
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+
+      box-shadow: var(--shadow-sm);
+
+      overflow: hidden;
+    }
+
+    .details-top {
+      padding: 22px;
+
+      border-bottom: 1px solid var(--border);
+    }
+
+    .route {
+      display: inline-flex;
+      align-items: center;
+
+      padding: 5px 9px;
+
+      border-radius: 7px;
+
+      background: #f1f5f9;
+
+      color: var(--text-muted);
+
+      font-family:
+        "SFMono-Regular",
+        Consolas,
+        "Liberation Mono",
+        monospace;
+
+      font-size: 11px;
+
+      margin-bottom: 12px;
+    }
+
+    .details-top h3 {
+      font-size: 21px;
+      letter-spacing: -0.02em;
+
+      margin-bottom: 7px;
+    }
+
+    .details-top p {
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+
+    .details-body {
+      padding: 22px;
+    }
+
+    .detail-group {
+      margin-bottom: 22px;
+    }
+
+    .detail-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .detail-group h4 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+
+      margin-bottom: 9px;
+
+      font-size: 12px;
+
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+
+      color: var(--text-muted);
+    }
+
+    .detail-group h4::before {
+      content: "";
+
+      width: 6px;
+      height: 6px;
+
+      border-radius: 50%;
+
+      background: var(--teal);
+    }
+
+    .detail-group ul {
+      list-style: none;
+
+      display: grid;
+      gap: 7px;
+    }
+
+    .detail-group li {
+      position: relative;
+
+      padding-left: 19px;
+
+      font-size: 13px;
+      color: #334155;
+    }
+
+    .detail-group li::before {
+      content: "✓";
+
+      position: absolute;
+      left: 0;
+      top: 0;
+
+      color: var(--teal);
+      font-weight: 900;
+    }
+
+    .architecture-box {
+      padding: 14px 15px;
+
+      background: #f8fafc;
+
+      border: 1px solid var(--border);
+
+      border-radius: 11px;
+
+      font-family:
+        "SFMono-Regular",
+        Consolas,
+        "Liberation Mono",
+        monospace;
+
+      font-size: 11px;
+
+      color: #475569;
+
+      overflow-x: auto;
+    }
+
+    .architecture-box code {
+      white-space: pre-wrap;
+    }
+
+    /* =========================================================
+       FEATURE TAGS
+       ========================================================= */
+
+    .feature-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+
+      margin-top: 12px;
+    }
+
+    .feature-tag {
+      padding: 5px 8px;
+
+      border-radius: 6px;
+
+      background: var(--teal-soft);
+      color: var(--teal-dark);
+
+      border: 1px solid #ccfbf1;
+
+      font-family:
+        "SFMono-Regular",
+        Consolas,
+        monospace;
+
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .feature-tag.red {
+      background: #fff1f2;
+      color: var(--dark-red);
+      border-color: #fecdd3;
+    }
+
+    /* =========================================================
+       FULL-SCREEN IMAGE PREVIEW MODAL
+       ========================================================= */
+
+    .image-preview-modal {
+      position: fixed;
+      inset: 0;
+
+      z-index: 9999;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      padding: 20px;
+
+      background:
+        rgba(2, 6, 23, 0.94);
+
+      backdrop-filter: blur(12px);
+
+      opacity: 0;
+      visibility: hidden;
+
+      transition:
+        opacity 180ms ease,
+        visibility 180ms ease;
+    }
+
+    .image-preview-modal.active {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .preview-content {
+      width: min(1500px, 96vw);
+      height: min(94vh, 1000px);
+
+      display: flex;
+      flex-direction: column;
+
+      background: #0f172a;
+
+      border:
+        1px solid rgba(255, 255, 255, 0.12);
+
+      border-radius: 18px;
+
+      overflow: hidden;
+
+      box-shadow:
+        0 30px 100px rgba(0, 0, 0, 0.55);
+
+      transform: scale(0.97);
+
+      transition:
+        transform 180ms ease;
+    }
+
+    .image-preview-modal.active .preview-content {
+      transform: scale(1);
+    }
+
+    .preview-toolbar {
+      min-height: 65px;
+
+      padding: 12px 15px 12px 20px;
+
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+
+      gap: 20px;
+
+      background: #0f172a;
+
+      border-bottom:
+        1px solid rgba(255, 255, 255, 0.1);
+
+      color: white;
+    }
+
+    .preview-title {
+      min-width: 0;
+    }
+
+    .preview-title strong {
+      display: block;
+
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+
+      font-size: 14px;
+    }
+
+    .preview-title span {
+      display: block;
+
+      margin-top: 2px;
+
+      color: #94a3b8;
+
+      font-family:
+        "SFMono-Regular",
+        Consolas,
+        monospace;
+
+      font-size: 10px;
+    }
+
+    .preview-close {
+      flex: 0 0 auto;
+
+      width: 40px;
+      height: 40px;
+
+      display: grid;
+      place-items: center;
+
+      border:
+        1px solid rgba(255, 255, 255, 0.12);
+
+      border-radius: 10px;
+
+      background:
+        rgba(255, 255, 255, 0.06);
+
+      color: white;
+
+      font-size: 27px;
+      font-weight: 300;
+
+      line-height: 1;
+
+      cursor: pointer;
+
+      transition:
+        background var(--transition),
+        transform var(--transition);
+    }
+
+    .preview-close:hover {
+      background: var(--dark-red);
+      transform: rotate(3deg);
+    }
+
+    .preview-close:focus-visible {
+      outline: 3px solid rgba(45, 212, 191, 0.55);
+      outline-offset: 2px;
+    }
+
+    .preview-image-area {
+      position: relative;
+
+      flex: 1;
+
+      min-height: 0;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      padding: 20px;
+
+      overflow: auto;
+
+      background:
+        radial-gradient(
+          circle at center,
+          rgba(30, 41, 59, 0.65),
+          #020617 75%
+        );
+    }
+
+    .preview-image-area::before {
+      content: "";
+
+      position: absolute;
+      inset: 0;
+
+      pointer-events: none;
+
+      opacity: 0.12;
+
+      background-image:
+        linear-gradient(
+          rgba(255, 255, 255, 0.08) 1px,
+          transparent 1px
+        ),
+        linear-gradient(
+          90deg,
+          rgba(255, 255, 255, 0.08) 1px,
+          transparent 1px
+        );
+
+      background-size: 32px 32px;
+    }
+
+    .preview-image-area img {
+      position: relative;
+      z-index: 1;
+
+      display: block;
+
+      max-width: 100%;
+      max-height: 100%;
+
+      width: auto;
+      height: auto;
+
+      object-fit: contain;
+
+      border-radius: 7px;
+
+      box-shadow:
+        0 20px 60px rgba(0, 0, 0, 0.4);
+    }
+
+    .preview-hint {
+      min-height: 39px;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      padding: 7px 15px;
+
+      background: #0f172a;
+
+      border-top:
+        1px solid rgba(255, 255, 255, 0.1);
+
+      color: #94a3b8;
+
+      font-size: 10px;
+    }
+
+    .preview-hint strong {
+      color: #e2e8f0;
+      margin: 0 4px;
+    }
+
+    /* =========================================================
+       FOOTER
+       ========================================================= */
+
+    footer {
+      padding: 45px 20px;
+
+      background: #0f172a;
+      color: white;
+    }
+
+    .footer-inner {
+      width: min(1500px, 100%);
+      margin: 0 auto;
+
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+
+      gap: 30px;
+    }
+
+    .footer-brand {
+      max-width: 520px;
+    }
+
+    .footer-brand h3 {
+      font-size: 18px;
+      margin-bottom: 7px;
+    }
+
+    .footer-brand p {
+      color: #94a3b8;
+      font-size: 12px;
+    }
+
+    .access-notice {
+      max-width: 480px;
+
+      padding: 15px 17px;
+
+      border:
+        1px solid rgba(251, 113, 133, 0.25);
+
+      border-radius: 12px;
+
+      background:
+        rgba(136, 19, 55, 0.12);
+    }
+
+    .access-notice strong {
+      display: block;
+
+      color: #fda4af;
+
+      font-size: 12px;
+
+      margin-bottom: 4px;
+    }
+
+    .access-notice span {
+      color: #cbd5e1;
+      font-size: 11px;
+    }
+
+    /* =========================================================
+       RESPONSIVE
+       ========================================================= */
+
+    @media (max-width: 1100px) {
+      .ui-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .hero-stats {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .hero-stat:nth-child(2) {
+        border-right: none;
+      }
+
+      .hero-stat:nth-child(-n + 2) {
+        border-bottom: 1px solid var(--border);
+      }
+    }
+
+    @media (max-width: 700px) {
+      .header-inner {
+        width: min(100% - 24px, 1500px);
+        min-height: 68px;
+      }
+
+      .header-badges {
+        display: none;
+      }
+
+      .container {
+        width: min(100% - 24px, 1500px);
+      }
+
+      .hero {
+        padding: 55px 15px;
+      }
+
+      .hero h2 {
+        font-size: 36px;
+      }
+
+      .hero-description {
+        font-size: 14px;
+      }
+
+      .hero-stats {
+        grid-template-columns: 1fr 1fr;
+        margin-top: 28px;
+      }
+
+      .hero-stat {
+        padding: 14px 10px;
+      }
+
+      .hero-stat strong {
+        font-size: 21px;
+      }
+
+      main {
+        padding-top: 40px;
+      }
+
+      .ui-grid {
+        gap: 18px;
+      }
+
+      .image-frame {
+        min-height: 250px;
+      }
+
+      .image-placeholder {
+        min-height: 250px;
+      }
+
+      .image-preview-trigger {
+        opacity: 1;
+
+        transform:
+          translateX(-50%)
+          translateY(0);
+
+        bottom: 12px;
+      }
+
+      .preview-content {
+        width: 100%;
+        height: 100%;
+
+        border-radius: 0;
+      }
+
+      .image-preview-modal {
+        padding: 0;
+      }
+
+      .preview-image-area {
+        padding: 10px;
+      }
+
+      .preview-toolbar {
+        min-height: 60px;
+      }
+
+      .footer-inner {
+        flex-direction: column;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- =======================================================
+       HEADER
+       ======================================================== -->
+
+  <header class="site-header">
+    <div class="header-inner">
+
+      <a href="#" class="brand">
+
+        <div class="brand-icon">
+          &lt;/&gt;
+        </div>
+
+        <div class="brand-text">
+          <h1>DevTeam-Hub</h1>
+          <p>Master Design Documentation</p>
+        </div>
+
+      </a>
+
+      <div class="header-badges">
+
+        <span class="badge teal">
+          ● Live Collaboration
+        </span>
+
+        <span class="badge">
+          MERN Stack
+        </span>
+
+        <span class="badge">
+          Socket.io
+        </span>
+
+        <span class="badge red">
+          Admin Controlled
+        </span>
+
+      </div>
+
+    </div>
+  </header>
+
+
+  <!-- =======================================================
+       HERO
+       ======================================================== -->
+
+  <section class="hero">
+
+    <div class="hero-content">
+
+      <div class="hero-kicker">
+        ⚡ Engineering Collaboration Platform
+      </div>
+
+      <h2>
+        DevTeam-Hub
+        <span>UI & Architecture</span>
+        Documentation
+      </h2>
+
+      <p class="hero-description">
+        A complete design and functional specification for a
+        real-time engineering workspace built for modern
+        development teams. The platform combines Kanban
+        collaboration, technical resources, real-time presence,
+        team communication, GitHub integration and centralized
+        administration.
+      </p>
+
+      <div class="hero-stats">
+
+        <div class="hero-stat">
+          <strong>8</strong>
+          <span>Core Interfaces</span>
+        </div>
+
+        <div class="hero-stat">
+          <strong>3</strong>
+          <span>Permission Levels</span>
+        </div>
+
+        <div class="hero-stat">
+          <strong>Real-Time</strong>
+          <span>Socket.io Events</span>
+        </div>
+
+        <div class="hero-stat">
+          <strong>Admin</strong>
+          <span>Controlled Access</span>
+        </div>
+
+      </div>
+
+    </div>
+
+  </section>
+
+
+  <!-- =======================================================
+       MAIN
+       ======================================================== -->
+
+  <main>
+
+    <div class="container">
+
+
+      <!-- ===================================================
+           GLOBAL PERMISSION MATRIX
+           ==================================================== -->
+
+      <section class="permission-section">
+
+        <div class="section-heading">
+
+          <div class="section-number">
+            #
+          </div>
+
+          <h2>Global Permission Matrix</h2>
+
+          <p>
+            Access model used across all DevTeam-Hub interfaces.
+          </p>
+
+        </div>
+
+        <div class="table-wrapper">
+
+          <table>
+
+            <thead>
+              <tr>
+                <th>Capability</th>
+                <th>Guest</th>
+                <th>Member</th>
+                <th>Admin</th>
+              </tr>
+            </thead>
+
+            <tbody>
+
+              <tr>
+                <td>View Public Landing Page</td>
+                <td class="allowed">✓ Allowed</td>
+                <td class="allowed">✓ Allowed</td>
+                <td class="allowed">✓ Allowed</td>
+              </tr>
+
+              <tr>
+                <td>View Public Resources</td>
+                <td class="allowed">✓ Allowed</td>
+                <td class="allowed">✓ Allowed</td>
+                <td class="allowed">✓ Allowed</td>
+              </tr>
+
+              <tr>
+                <td>Workspace Login</td>
+                <td class="restricted">Restricted</td>
+                <td class="allowed">✓ Allowed</td>
+                <td class="allowed">✓ Allowed</td>
+              </tr>
+
+              <tr>
+                <td>View Private Resources</td>
+                <td class="restricted">Restricted</td>
+                <td class="allowed">✓ Allowed</td>
+                <td class="allowed">✓ Allowed</td>
+              </tr>
+
+              <tr>
+                <td>Manage Own Tasks</td>
+                <td class="restricted">Restricted</td>
+                <td class="allowed">✓ Allowed</td>
+                <td class="allowed">✓ Allowed</td>
+              </tr>
+
+              <tr>
+                <td>Create / Assign Tasks</td>
+                <td class="restricted">Restricted</td>
+                <td class="restricted">Restricted</td>
+                <td class="allowed">✓ Allowed</td>
+              </tr>
+
+              <tr>
+                <td>Manage Resource Visibility</td>
+                <td class="restricted">Restricted</td>
+                <td class="restricted">Restricted</td>
+                <td class="allowed">✓ Allowed</td>
+              </tr>
+
+              <tr>
+                <td>Create Team Accounts</td>
+                <td class="restricted">Restricted</td>
+                <td class="restricted">Restricted</td>
+                <td class="allowed">✓ Allowed</td>
+              </tr>
+
+              <tr>
+                <td>Manage Team Members</td>
+                <td class="restricted">Restricted</td>
+                <td class="restricted">Restricted</td>
+                <td class="allowed">✓ Allowed</td>
+              </tr>
+
+            </tbody>
+
+          </table>
+
+        </div>
+
+      </section>
+
+
+      <!-- ===================================================
+           01 — LANDING PAGE
+           ==================================================== -->
+
+      <section class="ui-doc">
+
+        <div class="section-heading">
+
+          <div class="section-number">
+            01
+          </div>
+
+          <h2>Landing Page</h2>
+
+          <p>
+            Public-facing introduction and workspace discovery
+            interface.
+          </p>
+
+        </div>
+
+        <div class="ui-grid">
+
+
+          <div class="mockup-card">
+
+            <div class="mockup-card-header">
+
+              <strong>
+                UI Mockup
+              </strong>
+
+              <span>
+                Public Interface
+              </span>
+
+            </div>
+
+            <div class="image-frame">
+
+              <img
+                src="./DevTeam-Hub-UI/landing.png"
+                alt="DevTeam-Hub landing page mockup"
+                data-title="DevTeam-Hub — Landing Page"
+                data-route="/"
+              />
+
+              <button
+                type="button"
+                class="image-preview-trigger"
+                aria-label="View landing page mockup in full screen"
+              >
+                <span class="preview-icon">⛶</span>
+                <span>View Full Screen</span>
+              </button>
+
+              <div class="image-placeholder">
+
+                <div class="placeholder-icon">
+                  🖥
+                </div>
+
+                <strong>
+                  Landing Page Mockup
+                </strong>
+
+                <p>
+                  Place the generated landing page mockup at
+                  <strong>DevTeam-Hub-UI/landing.png</strong>
+                </p>
+
+              </div>
+
+            </div>
+
+          </div>
+
+
+          <div class="details-card">
+
+            <div class="details-top">
+
+              <span class="route">
+                GET /
+              </span>
+
+              <h3>
+                Real-Time Engineering Workspace
+              </h3>
+
+              <p>
+                The public entry point introduces DevTeam-Hub,
+                provides access to public technical resources,
+                and directs authorized users toward the login
+                experience.
+              </p>
+
+            </div>
+
+            <div class="details-body">
+
+              <div class="detail-group">
+
+                <h4>
+                  Interface
+                </h4>
+
+                <ul>
+
+                  <li>
+                    Sticky navigation with DevTeam-Hub branding.
+                  </li>
+
+                  <li>
+                    Navigation links for Overview, Public Assets,
+                    Engineering Team and Documentation.
+                  </li>
+
+                  <li>
+                    Primary "Sign In to Workspace" CTA.
+                  </li>
+
+                  <li>
+                    Public resource cards with tags and visibility
+                    badges.
+                  </li>
+
+                  <li>
+                    Engineering team roster with live status.
+                  </li>
+
+                  <li>
+                    Access restriction notice in the footer.
+                  </li>
+
+                </ul>
+
+              </div>
+
+
+              <div class="detail-group">
+
+                <h4>
+                  Functional Behavior
+                </h4>
+
+                <ul>
+
+                  <li>
+                    Guests can browse only public information.
+                  </li>
+
+                  <li>
+                    Private workspace information remains hidden.
+                  </li>
+
+                  <li>
+                    No public registration or sign-up option.
+                  </li>
+
+                  <li>
+                    Users are directed to the administrator for
+                    workspace credentials.
+                  </li>
+
+                </ul>
+
+              </div>
+
+
+              <div class="detail-group">
+
+                <h4>
+                  Technology
+                </h4>
+
+                <div class="architecture-box">
+                  <code>
+React + React Router
+Public Resource API
+Socket.io Presence
+JWT Login Redirect
+                  </code>
+                </div>
+
+                <div class="feature-tags">
+
+                  <span class="feature-tag">
+                    #Public
+                  </span>
+
+                  <span class="feature-tag">
+                    #Resources
+                  </span>
+
+                  <span class="feature-tag">
+                    #Presence
+                  </span>
+
+                  <span class="feature-tag red">
+                    #Restricted
+                  </span>
+
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </section>
+
+
+      <!-- ===================================================
+           02 — LOGIN
+           ==================================================== -->
+
+      <section class="ui-doc">
+
+        <div class="section-heading">
+
+          <div class="section-number">
+            02
+          </div>
+
+          <h2>Login Page</h2>
+
+          <p>
+            Secure authentication entry point for authorized
+            engineering team members.
+          </p>
+
+        </div>
+
+        <div class="ui-grid">
+
+
+          <div class="mockup-card">
+
+            <div class="mockup-card-header">
+
+              <strong>
+                UI Mockup
+              </strong>
+
+              <span>
+                Authentication
+              </span>
+
+            </div>
+
+            <div class="image-frame">
+
+              <img
+                src="./DevTeam-Hub-UI/login.png"
+                alt="DevTeam-Hub login page mockup"
+                data-title="DevTeam-Hub — Login Page"
+                data-route="/login"
+              />
+
+              <button
+                type="button"
+                class="image-preview-trigger"
+                aria-label="View login page mockup in full screen"
+              >
+                <span class="preview-icon">⛶</span>
+                <span>View Full Screen</span>
+              </button>
+
+              <div class="image-placeholder">
+
+                <div class="placeholder-icon">
+                  🔐
+                </div>
+
+                <strong>
+                  Login Mockup
+                </strong>
+
+                <p>
+                  Place the generated login mockup at
+                  <strong>DevTeam-Hub-UI/login.png</strong>
+                </p>
+
+              </div>
+
+            </div>
+
+          </div>
+
+
+          <div class="details-card">
+
+            <div class="details-top">
+
+              <span class="route">
+                GET /login
+              </span>
+
+              <h3>
+                Secure Workspace Authentication
+              </h3>
+
+              <p>
+                A minimal authentication screen designed for
+                controlled team access.
+              </p>
+
+            </div>
+
+            <div class="details-body">
+
+              <div class="detail-group">
+
+                <h4>
+                  Interface
+                </h4>
+
+                <ul>
+
+                  <li>
+                    Centered authentication card.
+                  </li>
+
+                  <li>
+                    Terminal-inspired DevTeam-Hub branding.
+                  </li>
+
+                  <li>
+                    Username and password fields.
+                  </li>
+
+                  <li>
+                    Teal focus states and primary action.
+                  </li>
+
+                  <li>
+                    Restricted-access message.
+                  </li>
+
+                </ul>
+
+              </div>
+
+
+              <div class="detail-group">
+
+                <h4>
+                  Security
+                </h4>
+
+                <ul>
+
+                  <li>
+                    JWT-based authentication.
+                  </li>
+
+                  <li>
+                    Passwords are never exposed in plain text.
+                  </li>
+
+                  <li>
+                    Protected routes require a valid token.
+                  </li>
+
+                  <li>
+                    Account creation is administrator controlled.
+                  </li>
+
+                </ul>
+
+              </div>
+
+
+              <div class="detail-group">
+
+                <h4>
+                  Technology
+                </h4>
+
+                <div class="architecture-box">
+                  <code>
+React Login Form
+       ↓
+POST /api/auth/login
+       ↓
+Node.js / Express
+       ↓
+JWT Token
+       ↓
+Protected Routes
+                  </code>
+                </div>
+
+                <div class="feature-tags">
+
+                  <span class="feature-tag">
+                    #JWT
+                  </span>
+
+                  <span class="feature-tag">
+                    #Auth
+                  </span>
+
+                  <span class="feature-tag red">
+                    #Restricted
+                  </span>
+
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </section>
+
+
+      <!-- ===================================================
+           03 — DASHBOARD
+           ==================================================== -->
+
+      <section class="ui-doc">
+
+        <div class="section-heading">
+
+          <div class="section-number">
+            03
+          </div>
+
+          <h2>Dashboard</h2>
+
+          <p>
+            Real-time engineering overview and activity center.
+          </p>
+
+        </div>
+
+        <div class="ui-grid">
+
+
+          <div class="mockup-card">
+
+            <div class="mockup-card-header">
+
+              <strong>
+                UI Mockup
+              </strong>
+
+              <span>
+                Workspace Overview
+              </span>
+
+            </div>
+
+            <div class="image-frame">
+
+              <img
+                src="./DevTeam-Hub-UI/user-dashboard.png"
+                alt="DevTeam-Hub user dashboard mockup"
+                data-title="DevTeam-Hub — Dashboard"
+                data-route="/dashboard"
+              />
+
+              <button
+                type="button"
+                class="image-preview-trigger"
+                aria-label="View dashboard mockup in full screen"
+              >
+                <span class="preview-icon">⛶</span>
+                <span>View Full Screen</span>
+              </button>
+
+              <div class="image-placeholder">
+
+                <div class="placeholder-icon">
+                  📊
+                </div>
+
+                <strong>
+                  Dashboard Mockup
+                </strong>
+
+                <p>
+                  Place the dashboard mockup at
+                  <strong>
+                    DevTeam-Hub-UI/user-dashboard.png
+                  </strong>
+                </p>
+
+              </div>
+
+            </div>
+
+          </div>
+
+
+          <div class="details-card">
+
+            <div class="details-top">
+
+              <span class="route">
+                GET /dashboard
+              </span>
+
+              <h3>
+                Real-Time Engineering Dashboard
+              </h3>
+
+              <p>
+                The primary workspace overview combines team
+                presence, task progress, recent activity and
+                administrator-level summaries.
+              </p>
+
+            </div>
+
+            <div class="details-body">
+
+              <div class="detail-group">
+
+                <h4>
+                  Interface
+                </h4>
+
+                <ul>
+
+                  <li>
+                    Three-column responsive dashboard layout.
+                  </li>
+
+                  <li>
+                    Live Pulse Roster.
+                  </li>
+
+                  <li>
+                    Activity Stream.
+                  </li>
+
+                  <li>
+                    My Tasks panel.
+                  </li>
+
+                  <li>
+                    Admin-only global summary.
+                  </li>
+
+                </ul>
+
+              </div>
+
+
+              <div class="detail-group">
+
+                <h4>
+                  Real-Time Events
+                </h4>
+
+                <ul>
+
+                  <li>
+                    Online/offline status updates.
+                  </li>
+
+                  <li>
+                    Task movement notifications.
+                  </li>
+
+                  <li>
+                    GitHub commit webhook activity.
+                  </li>
+
+                  <li>
+                    Live activity feed updates.
+                  </li>
+
+                </ul>
+
+              </div>
+
+
+              <div class="detail-group">
+
+                <h4>
+                  Architecture
+                </h4>
+
+                <div class="architecture-box">
+                  <code>
+Socket.io Client
+       ↕
+Socket.io Server
+       ↕
+MongoDB / Express
+       ↕
+GitHub Webhooks
+                  </code>
+                </div>
+
+                <div class="feature-tags">
+
+                  <span class="feature-tag">
+                    #Socket.io
+                  </span>
+
+                  <span class="feature-tag">
+                    #LivePresence
+                  </span>
+
+                  <span class="feature-tag">
+                    #Webhooks
+                  </span>
+
+                  <span class="feature-tag red">
+                    #AdminSummary
+                  </span>
+
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </section>
+
+
+      <!-- ===================================================
+           04 — RESOURCES
+           ==================================================== -->
+
+      <section class="ui-doc">
+
+        <div class="section-heading">
+
+          <div class="section-number">
+            04
+          </div>
+
+          <h2>Resources</h2>
+
+          <p>
+            Shared technical asset management for public and
+            private engineering resources.
+          </p>
+
+        </div>
+
+        <div class="ui-grid">
+
+
+          <div class="mockup-card">
+
+            <div class="mockup-card-header">
+
+              <strong>
+                UI Mockup
+              </strong>
+
+              <span>
+                Technical Assets
+              </span>
+
+            </div>
+
+            <div class="image-frame">
+
+              <img
+                src="./DevTeam-Hub-UI/resource.png"
+                alt="DevTeam-Hub resources page mockup"
+                data-title="DevTeam-Hub — Resources"
+                data-route="/resources"
+              />
+
+              <button
+                type="button"
+                class="image-preview-trigger"
+                aria-label="View resources mockup in full screen"
+              >
+                <span class="preview-icon">⛶</span>
+                <span>View Full Screen</span>
+              </button>
+
+              <div class="image-placeholder">
+
+                <div class="placeholder-icon">
+                  📁
+                </div>
+
+                <strong>
+                  Resources Mockup
+                </strong>
+
+                <p>
+                  Place the resources mockup at
+                  <strong>
+                    DevTeam-Hub-UI/resource.png
+                  </strong>
+                </p>
+
+              </div>
+
+            </div>
+
+          </div>
+
+
+          <div class="details-card">
+
+            <div class="details-top">
+
+              <span class="route">
+                GET /resources
+              </span>
+
+              <h3>
+                Technical Resource Hub
+              </h3>
+
+              <p>
+                Centralized storage and discovery for engineering
+                documentation, API references, UI assets and other
+                technical resources.
+              </p>
+
+            </div>
+
+            <div class="details-body">
+
+              <div class="detail-group">
+
+                <h4>
+                  Interface
+                </h4>
+
+                <ul>
+
+                  <li>
+                    Universal resource search.
+                  </li>
+
+                  <li>
+                    Tag filters such as #API, #Docs and #UI.
+                  </li>
+
+                  <li>
+                    Responsive resource card grid.
+                  </li>
+
+                  <li>
+                    File type indicators.
+                  </li>
+
+                  <li>
+                    Contributor information.
+                  </li>
+
+                  <li>
+                    Public and private visibility badges.
+                  </li>
+
+                </ul>
+
+              </div>
+
+
+              <div class="detail-group">
+
+                <h4>
+                  Administration
+                </h4>
+
+                <ul>
+
+                  <li>
+                    Admin can change visibility directly from
+                    resource cards.
+                  </li>
+
+                  <li>
+                    Admin can create and edit resources.
+                  </li>
+
+                  <li>
+                    Members can access resources according to
+                    their permissions.
+                  </li>
+
+                </ul>
+
+              </div>
+
+
+              <div class="detail-group">
+
+                <h4>
+                  Architecture
+                </h4>
+
+                <div class="architecture-box">
+                  <code>
+React Resource Grid
+       ↓
+Express REST API
+       ↓
+Resource Controller
+       ↓
+MongoDB
+       +
+File Storage
+                  </code>
+                </div>
+
+                <div class="feature-tags">
+
+                  <span class="feature-tag">
+                    #API
+                  </span>
+
+                  <span class="feature-tag">
+                    #Docs
+                  </span>
+
+                  <span class="feature-tag">
+                    #UI
+                  </span>
+
+                  <span class="feature-tag red">
+                    #Visibility
+                  </span>
+
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </section>
+
+
+      <!-- ===================================================
+           05 — KANBAN
+           ==================================================== -->
+
+      <section class="ui-doc">
+
+        <div class="section-heading">
+
+          <div class="section-number">
+            05
+          </div>
+
+          <h2>Kanban Task Management</h2>
+
+          <p>
+            Collaborative engineering task tracking with
+            real-time drag-and-drop synchronization.
+          </p>
+
+        </div>
+
+        <div class="ui-grid">
+
+
+          <div class="mockup-card">
+
+            <div class="mockup-card-header">
+
+              <strong>
+                UI Mockup
+              </strong>
+
+              <span>
+                Task Management
+              </span>
+
+            </div>
+
+            <div class="image-frame">
+
+              <img
+                src="./DevTeam-Hub-UI/kanban.png"
+                alt="DevTeam-Hub Kanban task board mockup"
+                data-title="DevTeam-Hub — Kanban"
+                data-route="/tasks"
+              />
+
+              <button
+                type="button"
+                class="image-preview-trigger"
+                aria-label="View Kanban mockup in full screen"
+              >
+                <span class="preview-icon">⛶</span>
+                <span>View Full Screen</span>
+              </button>
+
+              <div class="image-placeholder">
+
+                <div class="placeholder-icon">
+                  📋
+                </div>
+
+                <strong>
+                  Kanban Mockup
+                </strong>
+
+                <p>
+                  Place the Kanban mockup at
+                  <strong>
+                    DevTeam-Hub-UI/kanban.png
+                  </strong>
+                </p>
+
+              </div>
+
+            </div>
+
+          </div>
+
+
+          <div class="details-card">
+
+            <div class="details-top">
+
+              <span class="route">
+                GET /tasks
+              </span>
+
+              <h3>
+                Collaborative Kanban Workspace
+              </h3>
+
+              <p>
+                A three-column engineering board designed for
+                tracking work from backlog through completion.
+              </p>
+
+            </div>
+
+            <div class="details-body">
+
+              <div class="detail-group">
+
+                <h4>
+                  Columns
+                </h4>
+
+                <ul>
+
+                  <li>
+                    Undone
+                  </li>
+
+                  <li>
+                    In Progress
+                  </li>
+
+                  <li>
+                    Completed
+                  </li>
+
+                </ul>
+
+              </div>
+
+
+              <div class="detail-group">
+
+                <h4>
+                  Task Card
+                </h4>
+
+                <ul>
+
+                  <li>
+                    Task title and description.
+                  </li>
+
+                  <li>
+                    Priority indicator.
+                  </li>
+
+                  <li>
+                    Assigned member avatar.
+                  </li>
+
+                  <li>
+                    Due date.
+                  </li>
+
+                  <li>
+                    GitHub pull-request badge.
+                  </li>
+
+                </ul>
+
+              </div>
+
+
+              <div class="detail-group">
+
+                <h4>
+                  Real-Time Collaboration
+                </h4>
+
+                <ul>
+
+                  <li>
+                    Socket.io synchronizes task movement.
+                  </li>
+
+                  <li>
+                    Ghost cursors identify another user's active
+                    interaction.
+                  </li>
+
+                  <li>
+                    Teal user indicators show live participants.
+                  </li>
+
+                </ul>
+
+              </div>
+
+
+              <div class="detail-group">
+
+                <h4>
+                  Architecture
+                </h4>
+
+                <div class="architecture-box">
+                  <code>
+Drag Task
+   ↓
+Socket.io Event
+   ↓
+Server Validation
+   ↓
+MongoDB Update
+   ↓
+Broadcast to Team
+                  </code>
+                </div>
+
+                <div class="feature-tags">
+
+                  <span class="feature-tag">
+                    #Kanban
+                  </span>
+
+                  <span class="feature-tag">
+                    #DragDrop
+                  </span>
+
+                  <span class="feature-tag">
+                    #Socket.io
+                  </span>
+
+                  <span class="feature-tag">
+                    #GitHub
+                  </span>
+
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </section>
+
+
+      <!-- ===================================================
+           06 — CHAT
+           ==================================================== -->
+
+      <section class="ui-doc">
+
+        <div class="section-heading">
+
+          <div class="section-number">
+            06
+          </div>
+
+          <h2>Team Chat</h2>
+
+          <p>
+            Real-time engineering communication and technical
+            discussion interface.
+          </p>
+
+        </div>
+
+        <div class="ui-grid">
+
+
+          <div class="mockup-card">
+
+            <div class="mockup-card-header">
+
+              <strong>
+                UI Mockup
+              </strong>
+
+              <span>
+                Communication
+              </span>
+
+            </div>
+
+            <div class="image-frame">
+
+              <img
+                src="./DevTeam-Hub-UI/chat.png"
+                alt="DevTeam-Hub team chat mockup"
+                data-title="DevTeam-Hub — Team Chat"
+                data-route="/chat"
+              />
+
+              <button
+                type="button"
+                class="image-preview-trigger"
+                aria-label="View chat mockup in full screen"
+              >
+                <span class="preview-icon">⛶</span>
+                <span>View Full Screen</span>
+              </button>
+
+              <div class="image-placeholder">
+
+                <div class="placeholder-icon">
+                  💬
+                </div>
+
+                <strong>
+                  Chat Mockup
+                </strong>
+
+                <p>
+                  Place the chat mockup at
+                  <strong>
+                    DevTeam-Hub-UI/chat.png
+                  </strong>
+                </p>
+
+              </div>
+
+            </div>
+
+          </div>
+
+
+          <div class="details-card">
+
+            <div class="details-top">
+
+              <span class="route">
+                GET /chat
+              </span>
+
+              <h3>
+                Real-Time Engineering Messenger
+              </h3>
+
+              <p>
+                A split-pane communication system designed for
+                direct team discussions and technical collaboration.
+              </p>
+
+            </div>
+
+            <div class="details-body">
+
+              <div class="detail-group">
+
+                <h4>
+                  Interface
+                </h4>
+
+                <ul>
+
+                  <li>
+                    Team roster on the left.
+                  </li>
+
+                  <li>
+                    Teal online indicators.
+                  </li>
+
+                  <li>
+                    Message thread on the right.
+                  </li>
+
+                  <li>
+                    Message composer.
+                  </li>
+
+                  <li>
+                    Code snippet support.
+                  </li>
+
+                  <li>
+                    Read receipts and timestamps.
+                  </li>
+
+                </ul>
+
+              </div>
+
+
+              <div class="detail-group">
+
+                <h4>
+                  Real-Time Features
+                </h4>
+
+                <ul>
+
+                  <li>
+                    Live incoming messages.
+                  </li>
+
+                  <li>
+                    Typing indicator.
+                  </li>
+
+                  <li>
+                    Audio notification feedback.
+                  </li>
+
+                  <li>
+                    In-app incoming message banner.
+                  </li>
+
+                </ul>
+
+              </div>
+
+
+              <div class="detail-group">
+
+                <h4>
+                  Architecture
+                </h4>
+
+                <div class="architecture-box">
+                  <code>
+User A
+  ↕
+Socket.io
+  ↕
+Chat Server
+  ↕
+Socket.io
+  ↕
+User B
+
+Messages → MongoDB
+                  </code>
+                </div>
+
+                <div class="feature-tags">
+
+                  <span class="feature-tag">
+                    #Chat
+                  </span>
+
+                  <span class="feature-tag">
+                    #Typing
+                  </span>
+
+                  <span class="feature-tag">
+                    #ReadReceipts
+                  </span>
+
+                  <span class="feature-tag">
+                    #Realtime
+                  </span>
+
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </section>
+
+
+      <!-- ===================================================
+           07 — ADMIN
+           ==================================================== -->
+
+      <section class="ui-doc">
+
+        <div class="section-heading">
+
+          <div class="section-number">
+            07
+          </div>
+
+          <h2>Admin Control Center</h2>
+
+          <p>
+            Centralized team onboarding, account generation and
+            resource/task visibility management.
+          </p>
+
+        </div>
+
+        <div class="ui-grid">
+
+
+          <div class="mockup-card">
+
+            <div class="mockup-card-header">
+
+              <strong>
+                UI Mockup
+              </strong>
+
+              <span>
+                Restricted Area
+              </span>
+
+            </div>
+
+            <div class="image-frame">
+
+              <img
+                src="./DevTeam-Hub-UI/admin.png"
+                alt="DevTeam-Hub admin control center mockup"
+                data-title="DevTeam-Hub — Admin Control Center"
+                data-route="/admin"
+              />
+
+              <button
+                type="button"
+                class="image-preview-trigger"
+                aria-label="View admin mockup in full screen"
+              >
+                <span class="preview-icon">⛶</span>
+                <span>View Full Screen</span>
+              </button>
+
+              <div class="image-placeholder">
+
+                <div class="placeholder-icon">
+                  🛡
+                </div>
+
+                <strong>
+                  Admin Mockup
+                </strong>
+
+                <p>
+                  Place the admin mockup at
+                  <strong>
+                    DevTeam-Hub-UI/admin.png
+                  </strong>
+                </p>
+
+              </div>
+
+            </div>
+
+          </div>
+
+
+          <div class="details-card">
+
+            <div class="details-top">
+
+              <span class="route">
+                GET /admin
+              </span>
+
+              <h3>
+                Administrator Control Center
+              </h3>
+
+              <p>
+                A restricted two-tab administration interface for
+                controlling team accounts and workspace visibility.
+              </p>
+
+            </div>
+
+            <div class="details-body">
+
+              <div class="detail-group">
+
+                <h4>
+                  Tab 01 — User Onboarding
+                </h4>
+
+                <ul>
+
+                  <li>
+                    Enter member name.
+                  </li>
+
+                  <li>
+                    Enter email.
+                  </li>
+
+                  <li>
+                    Select Member or Admin role.
+                  </li>
+
+                  <li>
+                    Generate account and credentials.
+                  </li>
+
+                  <li>
+                    Display generated credentials in a secure modal.
+                  </li>
+
+                </ul>
+
+              </div>
+
+
+              <div class="detail-group">
+
+                <h4>
+                  Tab 02 — Visibility Matrix
+                </h4>
+
+                <ul>
+
+                  <li>
+                    View all tasks and resources.
+                  </li>
+
+                  <li>
+                    Public/private visibility state.
+                  </li>
+
+                  <li>
+                    Master visibility controls.
+                  </li>
+
+                  <li>
+                    Bulk public/private management.
+                  </li>
+
+                </ul>
+
+              </div>
+
+
+              <div class="detail-group">
+
+                <h4>
+                  Security Architecture
+                </h4>
+
+                <div class="architecture-box">
+                  <code>
+JWT Authentication
+       ↓
+Role Middleware
+       ↓
+Admin Authorization
+       ↓
+Admin Controller
+       ↓
+MongoDB
+                  </code>
+                </div>
+
+                <div class="feature-tags">
+
+                  <span class="feature-tag red">
+                    #AdminOnly
+                  </span>
+
+                  <span class="feature-tag red">
+                    #RBAC
+                  </span>
+
+                  <span class="feature-tag">
+                    #Onboarding
+                  </span>
+
+                  <span class="feature-tag">
+                    #Visibility
+                  </span>
+
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </section>
+
+
+      <!-- ===================================================
+           08 — PROFILE
+           ==================================================== -->
+
+      <section class="ui-doc">
+
+        <div class="section-heading">
+
+          <div class="section-number">
+            08
+          </div>
+
+          <h2>Team Profile</h2>
+
+          <p>
+            Personal engineering identity and contribution
+            management.
+          </p>
+
+        </div>
+
+        <div class="ui-grid">
+
+
+          <div class="mockup-card">
+
+            <div class="mockup-card-header">
+
+              <strong>
+                UI Mockup
+              </strong>
+
+              <span>
+                Team Identity
+              </span>
+
+            </div>
+
+            <div class="image-frame">
+
+              <img
+                src="./DevTeam-Hub-UI/profile.png"
+                alt="DevTeam-Hub team profile mockup"
+                data-title="DevTeam-Hub — Team Profile"
+                data-route="/team/profile/edit"
+              />
+
+              <button
+                type="button"
+                class="image-preview-trigger"
+                aria-label="View profile mockup in full screen"
+              >
+                <span class="preview-icon">⛶</span>
+                <span>View Full Screen</span>
+              </button>
+
+              <div class="image-placeholder">
+
+                <div class="placeholder-icon">
+                  👤
+                </div>
+
+                <strong>
+                  Profile Mockup
+                </strong>
+
+                <p>
+                  Place the profile mockup at
+                  <strong>
+                    DevTeam-Hub-UI/profile.png
+                  </strong>
+                </p>
+
+              </div>
+
+            </div>
+
+          </div>
+
+
+          <div class="details-card">
+
+            <div class="details-top">
+
+              <span class="route">
+                GET /team/profile/edit
+              </span>
+
+              <h3>
+                Engineering Team Profile
+              </h3>
+
+              <p>
+                Personal workspace profile containing identity,
+                role, GitHub information and contribution history.
+              </p>
+
+            </div>
+
+            <div class="details-body">
+
+              <div class="detail-group">
+
+                <h4>
+                  Profile Header
+                </h4>
+
+                <ul>
+
+                  <li>
+                    User avatar.
+                  </li>
+
+                  <li>
+                    Display name.
+                  </li>
+
+                  <li>
+                    Bio.
+                  </li>
+
+                  <li>
+                    Role badge.
+                  </li>
+
+                  <li>
+                    Live online/offline status.
+                  </li>
+
+                </ul>
+
+              </div>
+
+
+              <div class="detail-group">
+
+                <h4>
+                  Editable Information
+                </h4>
+
+                <ul>
+
+                  <li>
+                    Full name.
+                  </li>
+
+                  <li>
+                    Email.
+                  </li>
+
+                  <li>
+                    Bio.
+                  </li>
+
+                  <li>
+                    GitHub handle.
+                  </li>
+
+                  <li>
+                    Save and cancel actions.
+                  </li>
+
+                </ul>
+
+              </div>
+
+
+              <div class="detail-group">
+
+                <h4>
+                  Activity
+                </h4>
+
+                <ul>
+
+                  <li>
+                    Assigned Kanban tasks.
+                  </li>
+
+                  <li>
+                    Recent contributions.
+                  </li>
+
+                  <li>
+                    Task completion summary.
+                  </li>
+
+                </ul>
+
+              </div>
+
+
+              <div class="detail-group">
+
+                <h4>
+                  Guardrail
+                </h4>
+
+                <div class="architecture-box">
+                  <code>
+Authenticated User
+       ↓
+Profile Ownership Check
+       ↓
+Update Personal Fields
+
+Role / Permissions
+→ Admin Controlled
+                  </code>
+                </div>
+
+                <div class="feature-tags">
+
+                  <span class="feature-tag">
+                    #Profile
+                  </span>
+
+                  <span class="feature-tag">
+                    #GitHub
+                  </span>
+
+                  <span class="feature-tag">
+                    #Activity
+                  </span>
+
+                  <span class="feature-tag red">
+                    #Guardrail
+                  </span>
+
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </section>
+
+
+    </div>
+
+  </main>
+
+
+  <!-- =======================================================
+       FULL-SCREEN IMAGE PREVIEW MODAL
+       ======================================================== -->
+
+  <div
+    class="image-preview-modal"
+    id="imagePreviewModal"
+    aria-hidden="true"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Full-screen UI mockup preview"
+  >
+
+    <div class="preview-content">
+
+      <div class="preview-toolbar">
+
+        <div class="preview-title">
+
+          <strong id="previewTitle">
+            DevTeam-Hub UI Mockup
+          </strong>
+
+          <span id="previewRoute">
+            UI Preview
+          </span>
+
+        </div>
+
+        <button
+          type="button"
+          class="preview-close"
+          id="previewClose"
+          aria-label="Close full-screen preview"
+          title="Close preview"
+        >
+          &times;
+        </button>
+
+      </div>
+
+
+      <div class="preview-image-area">
+
+        <img
+          id="previewImage"
+          src=""
+          alt="DevTeam-Hub full-screen UI preview"
+        />
+
+      </div>
+
+
+      <div class="preview-hint">
+
+        Press
+        <strong>ESC</strong>
+        or click outside the image to close
+
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <!-- =======================================================
+       FOOTER
+       ======================================================== -->
+
+  <footer>
+
+    <div class="footer-inner">
+
+      <div class="footer-brand">
+
+        <h3>
+          DevTeam-Hub
+        </h3>
+
+        <p>
+          Real-time engineering collaboration platform
+          designed for modern development teams.
+        </p>
+
+      </div>
+
+
+      <div class="access-notice">
+
+        <strong>
+          🔒 Access Restricted
+        </strong>
+
+        <span>
+          Public workspace view only. Self-registration is
+          disabled. Please contact your Team Admin to receive
+          workspace login credentials.
+        </span>
+
+      </div>
+
+    </div>
+
+  </footer>
+
+
+  <!-- =======================================================
+       JAVASCRIPT
+       ======================================================== -->
+
+  <script>
+
+    /* =========================================================
+       IMAGE FALLBACK
+       ========================================================= */
+
+    document
+      .querySelectorAll(".image-frame img")
+      .forEach((image) => {
+
+        image.addEventListener("error", () => {
+
+          image.style.display = "none";
+
+          const frame =
+            image.closest(".image-frame");
+
+          if (!frame) {
+            return;
+          }
+
+          const placeholder =
+            frame.querySelector(".image-placeholder");
+
+          const previewButton =
+            frame.querySelector(
+              ".image-preview-trigger"
+            );
+
+          if (placeholder) {
+            placeholder.style.display = "block";
+          }
+
+          if (previewButton) {
+            previewButton.style.display = "none";
+          }
+
+        });
+
+      });
+
+
+    /* =========================================================
+       FULL-SCREEN IMAGE PREVIEW
+       ========================================================= */
+
+    const previewModal =
+      document.getElementById(
+        "imagePreviewModal"
+      );
+
+    const previewImage =
+      document.getElementById(
+        "previewImage"
+      );
+
+    const previewTitle =
+      document.getElementById(
+        "previewTitle"
+      );
+
+    const previewRoute =
+      document.getElementById(
+        "previewRoute"
+      );
+
+    const previewClose =
+      document.getElementById(
+        "previewClose"
+      );
+
+
+    let lastFocusedElement = null;
+
+
+    /* =========================================================
+       OPEN PREVIEW
+       ========================================================= */
+
+    function openImagePreview(image) {
+
+      if (!image || !image.src) {
+        return;
+      }
+
+      lastFocusedElement =
+        document.activeElement;
+
+      previewImage.src =
+        image.src;
+
+      previewImage.alt =
+        image.alt ||
+        "DevTeam-Hub UI preview";
+
+      previewTitle.textContent =
+        image.dataset.title ||
+        "DevTeam-Hub UI Mockup";
+
+      previewRoute.textContent =
+        image.dataset.route ||
+        "UI Preview";
+
+      previewModal.classList.add(
+        "active"
+      );
+
+      previewModal.setAttribute(
+        "aria-hidden",
+        "false"
+      );
+
+      document.body.classList.add(
+        "preview-open"
+      );
+
+      setTimeout(() => {
+
+        previewClose.focus();
+
+      }, 50);
+
+    }
+
+
+    /* =========================================================
+       CLOSE PREVIEW
+       ========================================================= */
+
+    function closeImagePreview() {
+
+      previewModal.classList.remove(
+        "active"
+      );
+
+      previewModal.setAttribute(
+        "aria-hidden",
+        "true"
+      );
+
+      document.body.classList.remove(
+        "preview-open"
+      );
+
+      setTimeout(() => {
+
+        previewImage.src = "";
+
+      }, 200);
+
+
+      if (
+        lastFocusedElement &&
+        typeof lastFocusedElement.focus === "function"
+      ) {
+
+        lastFocusedElement.focus();
+
+      }
+
+    }
+
+
+    /* =========================================================
+       IMAGE CLICK
+       ========================================================= */
+
+    document
+      .querySelectorAll(".image-frame img")
+      .forEach((image) => {
+
+        image.addEventListener(
+          "click",
+          () => {
+
+            openImagePreview(image);
+
+          }
+        );
+
+      });
+
+
+    /* =========================================================
+       IMAGE KEYBOARD ACCESSIBILITY
+       ========================================================= */
+
+    document
+      .querySelectorAll(".image-frame img")
+      .forEach((image) => {
+
+        image.setAttribute(
+          "tabindex",
+          "0"
+        );
+
+        image.setAttribute(
+          "role",
+          "button"
+        );
+
+        image.addEventListener(
+          "keydown",
+          (event) => {
+
+            if (
+              event.key === "Enter" ||
+              event.key === " "
+            ) {
+
+              event.preventDefault();
+
+              openImagePreview(image);
+
+            }
+
+          }
+        );
+
+      });
+
+
+    /* =========================================================
+       FULL-SCREEN BUTTONS
+       ========================================================= */
+
+    document
+      .querySelectorAll(
+        ".image-preview-trigger"
+      )
+      .forEach((button) => {
+
+        button.addEventListener(
+          "click",
+          (event) => {
+
+            event.stopPropagation();
+
+            const frame =
+              button.closest(
+                ".image-frame"
+              );
+
+            if (!frame) {
+              return;
+            }
+
+            const image =
+              frame.querySelector("img");
+
+            openImagePreview(image);
+
+          }
+        );
+
+      });
+
+
+    /* =========================================================
+       CLOSE BUTTON
+       ========================================================= */
+
+    previewClose.addEventListener(
+      "click",
+      closeImagePreview
+    );
+
+
+    /* =========================================================
+       CLICK OUTSIDE IMAGE
+       ========================================================= */
+
+    previewModal.addEventListener(
+      "click",
+      (event) => {
+
+        if (
+          event.target ===
+          previewModal
+        ) {
+
+          closeImagePreview();
+
+        }
+
+      }
+    );
+
+
+    /* =========================================================
+       ESCAPE KEY
+       ========================================================= */
+
+    document.addEventListener(
+      "keydown",
+      (event) => {
+
+        if (
+          event.key === "Escape" &&
+          previewModal.classList.contains(
+            "active"
+          )
+        ) {
+
+          closeImagePreview();
+
+        }
+
+      }
+    );
+
+
+    /* =========================================================
+       PREVENT IMAGE CLICK FROM CLOSING MODAL
+       ========================================================= */
+
+    previewImage.addEventListener(
+      "click",
+      (event) => {
+
+        event.stopPropagation();
+
+      }
+    );
+
+
+    /* =========================================================
+       SIMPLE FOCUS TRAP
+       ========================================================= */
+
+    previewModal.addEventListener(
+      "keydown",
+      (event) => {
+
+        if (
+          event.key !== "Tab" ||
+          !previewModal.classList.contains(
+            "active"
+          )
+        ) {
+          return;
+        }
+
+        const focusableElements =
+          previewModal.querySelectorAll(
+            "button"
+          );
+
+        if (!focusableElements.length) {
+          return;
+        }
+
+        const first =
+          focusableElements[0];
+
+        const last =
+          focusableElements[
+            focusableElements.length - 1
+          ];
+
+        if (
+          event.shiftKey &&
+          document.activeElement === first
+        ) {
+
+          event.preventDefault();
+
+          last.focus();
+
+        }
+        else if (
+          !event.shiftKey &&
+          document.activeElement === last
+        ) {
+
+          event.preventDefault();
+
+          first.focus();
+
+        }
+
+      }
+    );
+
+  </script>
+
+</body>
+</html>
