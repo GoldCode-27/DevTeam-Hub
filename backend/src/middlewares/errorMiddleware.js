@@ -1,7 +1,5 @@
 /**
- * Global Error Handling Middleware
- * Catches all thrown application errors and formats them strictly to match the API specification:
- * { "error": { "code": "...", "message": "...", "details": [] } }
+ * Global Error Handling Middleware (ES6 Module)
  */
 const errorHandler = (err, req, res, next) => {
   const statusCode = err.statusCode || 500;
@@ -9,7 +7,6 @@ const errorHandler = (err, req, res, next) => {
   const message = err.message || 'An unexpected internal server error occurred.';
   const details = err.details || [];
 
-  // Log server errors for developer inspection in development mode
   if (statusCode >= 500) {
     console.error(` [Error ${statusCode} - ${errorCode}]:`, err);
   }
@@ -23,4 +20,4 @@ const errorHandler = (err, req, res, next) => {
   });
 };
 
-module.exports = errorHandler;
+export default errorHandler;
