@@ -1,6 +1,5 @@
 /**
- * Custom Application Error Class
- * Standardizes operational errors across all modules as specified in the API documentation.
+ * Custom Application Error Class (ES6 Module)
  */
 class AppError extends Error {
   constructor(message, statusCode = 500, code = 'INTERNAL_SERVER_ERROR', details = []) {
@@ -14,4 +13,4 @@ class AppError extends Error {
   }
 }
 
-module.exports = AppError;
+export default AppError;

@@ -1,35 +1,18 @@
-const express = require('express');
-const cors = require('cors');
-const helmet = require('helmet');
-const morgan = require('morgan');
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import morgan from 'morgan';
 
-const errorHandler = require('./middlewares/errorMiddleware');
-const notFoundHandler = require('./middlewares/notFoundMiddleware');
+import errorHandler from './middlewares/errorMiddleware.js';
+import notFoundHandler from './middlewares/notFoundMiddleware.js';
 
 const app = express();
 
-/**
- * Global Middlewares
- */
-// 1. Security HTTP Headers
 app.use(helmet());
-
-// 2. Cross-Origin Resource Sharing (Allows React Frontend to communicate)
-app.use(cors({
-  origin: true,
-  credentials: true
-}));
-
-// 3. HTTP Request Logging (Inspect API calls in development)
+app.use(cors({ origin: true, credentials: true }));
 app.use(morgan('dev'));
-
-// 4. Body Parser (Accept JSON payloads)
 app.use(express.json());
 
-/**
- * Base Health Check Route
- * Verifies the API server is alive and responding
- */
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'healthy',
@@ -38,14 +21,7 @@ app.get('/health', (req, res) => {
   });
 });
 
-/**
- * 404 Fallback for unhandled routes
- */
 app.use(notFoundHandler);
-
-/**
- * Centralized Global Error Handler
- */
 app.use(errorHandler);
 
-module.exports = app;
+export default app;
