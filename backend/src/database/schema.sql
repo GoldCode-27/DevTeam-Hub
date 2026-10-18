@@ -1,8 +1,7 @@
 -- ============================================================================
--- DEVTEAM-HUB DATABASE & TABLES SCHEMA (FULL PRODUCTION SCRIPT)
+-- DEVTEAM-HUB FINAL DATABASE SCHEMA (22 tables)
+-- Base schema + migration 002 merged into one file.
 -- ============================================================================
-
--- 1. CREATE DATABASE
 CREATE DATABASE IF NOT EXISTS devteam_hub
   CHARACTER SET utf8mb4
   COLLATE utf8mb4_general_ci;
@@ -15,24 +14,37 @@ SET foreign_key_checks = 0;
 -- ============================================================================
 -- 1. USERS TABLE (NO ROLES - PURE IDENTITY ONLY)
 -- ============================================================================
+DROP TABLE IF EXISTS user_skills;
 DROP TABLE IF EXISTS users;
 CREATE TABLE users (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    public_id CHAR(36) NOT NULL UNIQUE,                -- UUID v4 exposed to API clients
-    username VARCHAR(50) NOT NULL UNIQUE,
-    email VARCHAR(191) NOT NULL UNIQUE,                 -- Fits maximum UTF8MB4 index byte limit
-    password_hash VARCHAR(255) NOT NULL,
+    public_id CHAR(36) NOT NULL UNIQUE,                -- UUID v4 exposed to API clients to prevent ID enumeration
+    username VARCHAR(50) NOT NULL UNIQUE,               -- Unique platform username
+    email VARCHAR(191) NOT NULL UNIQUE,                 -- 191 chars fits maximum UTF8MB4 index byte limit
+    password_hash VARCHAR(255) NOT NULL,                -- Argon2id or Bcrypt hash
     first_name VARCHAR(50) NOT NULL,
     last_name VARCHAR(50) NOT NULL,
+    job_title VARCHAR(100) NULL,                        -- "Frontend Developer" shown on cards and Live Pulse
     status ENUM('ACTIVE', 'SUSPENDED', 'PENDING_ONBOARDING') NOT NULL DEFAULT 'PENDING_ONBOARDING',
-    bio VARCHAR(500) NULL,
-    avatar_url VARCHAR(2048) NULL,
-    last_active_at DATETIME NULL,                       -- Powers the real-time "Live Pulse"
+    bio VARCHAR(500) NULL,                              -- Member editable bio
+    current_focus VARCHAR(150) NULL,                    -- "Working on UI components"
+    avatar_url VARCHAR(2048) NULL,                      -- Secure S3/CDN object path
+    social_links JSON NULL,                             -- {"github":"","linkedin":"","x":""}
+    last_active_at DATETIME NULL,                       -- Powers the real-time "Live Pulse" glowing indicator
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
     INDEX idx_users_status (status),
     INDEX idx_users_pulse (last_active_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- NEW: profile skill chips (React, Node.js, ...)
+CREATE TABLE user_skills (
+    user_id BIGINT UNSIGNED NOT NULL,
+    skill VARCHAR(50) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, skill),
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- ============================================================================
@@ -45,7 +57,7 @@ CREATE TABLE permissions (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     slug VARCHAR(100) NOT NULL UNIQUE,                  -- e.g., 'task:delete', 'resource:toggle_visibility'
     module VARCHAR(50) NOT NULL,                        -- Grouping: 'TASKS', 'RESOURCES', 'USERS', 'CHAT'
-    description VARCHAR(255) NOT NULL,
+    description VARCHAR(255) NOT NULL,                  -- Display text for the Admin toggle checklist
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_permissions_module (module)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -53,7 +65,7 @@ CREATE TABLE permissions (
 CREATE TABLE user_permissions (
     user_id BIGINT UNSIGNED NOT NULL,
     permission_id INT UNSIGNED NOT NULL,
-    granted_by BIGINT UNSIGNED NULL,
+    granted_by BIGINT UNSIGNED NULL,                    -- NULL for root bootstrap admin; tracks grantor for audit
     granted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     PRIMARY KEY (user_id, permission_id),
@@ -71,9 +83,9 @@ CREATE TABLE sessions (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     user_id BIGINT UNSIGNED NOT NULL,
     refresh_token_hash CHAR(64) NOT NULL UNIQUE,        -- SHA-256 digest of rotating refresh token
-    ip_address VARCHAR(45) NOT NULL,
-    user_agent VARCHAR(512) NOT NULL,
-    is_revoked BOOLEAN NOT NULL DEFAULT FALSE,
+    ip_address VARCHAR(45) NOT NULL,                    -- IPv4 and IPv6 support
+    user_agent VARCHAR(512) NOT NULL,                   -- Client browser / device fingerprint
+    is_revoked BOOLEAN NOT NULL DEFAULT FALSE,          -- Allows instant revocation of a single device
     expires_at DATETIME NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_used_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -85,11 +97,12 @@ CREATE TABLE sessions (
 -- ============================================================================
 -- 4. TAGS
 -- ============================================================================
+DROP TABLE IF EXISTS task_tags;
 DROP TABLE IF EXISTS tags;
 CREATE TABLE tags (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(50) NOT NULL UNIQUE,
-    color_hex CHAR(7) NOT NULL DEFAULT '#6366F1',
+    name VARCHAR(50) NOT NULL UNIQUE,                   -- e.g., 'API', 'Docs', 'UI'
+    color_hex CHAR(7) NOT NULL DEFAULT '#6366F1',       -- UI hex badge color
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -107,7 +120,7 @@ CREATE TABLE resources (
     file_type ENUM('PDF', 'DOC', 'IMAGE', 'ARCHIVE', 'CODE', 'LINK', 'OTHER') NOT NULL,
     file_url VARCHAR(2048) NOT NULL,
     file_size_bytes BIGINT UNSIGNED NULL,
-    is_public BOOLEAN NOT NULL DEFAULT FALSE,
+    is_public BOOLEAN NOT NULL DEFAULT FALSE,           -- Guest access: Guests ONLY see is_public = TRUE
     security_badge ENUM('PUBLIC', 'INTERNAL', 'RESTRICTED') NOT NULL DEFAULT 'INTERNAL',
     uploaded_by BIGINT UNSIGNED NOT NULL,
     download_count INT UNSIGNED NOT NULL DEFAULT 0,
@@ -132,18 +145,21 @@ CREATE TABLE resource_tags (
 -- ============================================================================
 -- 6. TASKS (KANBAN BOARD ENGINE)
 -- ============================================================================
+DROP TABLE IF EXISTS subtasks;
+DROP TABLE IF EXISTS task_comments;
 DROP TABLE IF EXISTS tasks;
 CREATE TABLE tasks (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    task_code VARCHAR(20) NOT NULL UNIQUE,              -- e.g., 'DEV-101'
+    task_code VARCHAR(20) NOT NULL UNIQUE,              -- Formatted display code (e.g., 'DEV-101')
     title VARCHAR(255) NOT NULL,
     description LONGTEXT NULL,
     status ENUM('UNDONE', 'IN_PROGRESS', 'COMPLETED') NOT NULL DEFAULT 'UNDONE',
     priority ENUM('LOW', 'MEDIUM', 'HIGH', 'URGENT') NOT NULL DEFAULT 'MEDIUM',
-    position DECIMAL(10, 4) NOT NULL DEFAULT 65535.0000,-- Fractional indexing for reordering
+    is_public BOOLEAN NOT NULL DEFAULT FALSE,           -- Guests ONLY see is_public = TRUE
+    position DECIMAL(10, 4) NOT NULL DEFAULT 65535.0000,-- Fractional indexing: O(1) drag & drop reordering
     due_date DATE NULL,
-    assignee_id BIGINT UNSIGNED NULL,
-    created_by BIGINT UNSIGNED NOT NULL,
+    assignee_id BIGINT UNSIGNED NULL,                   -- Assigned team member
+    created_by BIGINT UNSIGNED NOT NULL,                -- Task creator
     completed_at DATETIME NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -152,7 +168,44 @@ CREATE TABLE tasks (
     FOREIGN KEY (created_by) REFERENCES users (id) ON DELETE RESTRICT,
     INDEX idx_tasks_kanban (status, position),
     INDEX idx_tasks_my_work (assignee_id, status),
-    INDEX idx_tasks_due_date (due_date)
+    INDEX idx_tasks_due_date (due_date),
+    INDEX idx_tasks_guest (is_public, created_at DESC)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- NEW: task tags (#Backend, #API on Kanban cards)
+CREATE TABLE task_tags (
+    task_id BIGINT UNSIGNED NOT NULL,
+    tag_id INT UNSIGNED NOT NULL,
+    PRIMARY KEY (task_id, tag_id),
+    FOREIGN KEY (task_id) REFERENCES tasks (id) ON DELETE CASCADE,
+    FOREIGN KEY (tag_id) REFERENCES tags (id) ON DELETE CASCADE,
+    INDEX idx_task_tags_tag (tag_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- NEW: subtask checklist ("2 / 4")
+CREATE TABLE subtasks (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    task_id BIGINT UNSIGNED NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    is_done BOOLEAN NOT NULL DEFAULT FALSE,
+    position DECIMAL(10, 4) NOT NULL DEFAULT 65535.0000,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (task_id) REFERENCES tasks (id) ON DELETE CASCADE,
+    INDEX idx_subtasks_task (task_id, position)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- NEW: task comment thread
+CREATE TABLE task_comments (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    task_id BIGINT UNSIGNED NOT NULL,
+    author_id BIGINT UNSIGNED NOT NULL,
+    content TEXT NOT NULL,
+    is_edited BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (task_id) REFERENCES tasks (id) ON DELETE CASCADE,
+    FOREIGN KEY (author_id) REFERENCES users (id) ON DELETE RESTRICT,
+    INDEX idx_task_comments_task (task_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- ============================================================================
@@ -163,14 +216,14 @@ CREATE TABLE task_github_events (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     task_id BIGINT UNSIGNED NOT NULL,
     event_type ENUM('COMMIT', 'PULL_REQUEST') NOT NULL,
-    external_ref VARCHAR(100) NOT NULL,
+    external_ref VARCHAR(100) NOT NULL,                 -- Commit SHA or PR number (e.g., 'PR#42')
     repository_name VARCHAR(150) NOT NULL,
     branch_name VARCHAR(100) NULL,
-    action VARCHAR(50) NOT NULL,
-    title VARCHAR(255) NOT NULL,
+    action VARCHAR(50) NOT NULL,                        -- 'opened', 'merged', 'pushed', 'closed'
+    title VARCHAR(255) NOT NULL,                        -- Commit message or PR title
     author_username VARCHAR(100) NOT NULL,
     url VARCHAR(2048) NOT NULL,
-    payload_snapshot JSON NULL,
+    payload_snapshot JSON NULL,                         -- Auditing payload directly from GitHub
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     FOREIGN KEY (task_id) REFERENCES tasks (id) ON DELETE CASCADE,
@@ -181,6 +234,8 @@ CREATE TABLE task_github_events (
 -- ============================================================================
 -- 8. CHATS & MESSAGES (REAL-TIME ENGINE)
 -- ============================================================================
+DROP TABLE IF EXISTS chat_pins;
+DROP TABLE IF EXISTS message_reactions;
 DROP TABLE IF EXISTS messages;
 DROP TABLE IF EXISTS chat_members;
 DROP TABLE IF EXISTS chats;
@@ -188,7 +243,7 @@ DROP TABLE IF EXISTS chats;
 CREATE TABLE chats (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     public_id CHAR(36) NOT NULL UNIQUE,
-    name VARCHAR(100) NOT NULL,
+    name VARCHAR(100) NOT NULL,                         -- Channel name (e.g., '#general') or DM display title
     type ENUM('PUBLIC_CHANNEL', 'PRIVATE_CHANNEL', 'DIRECT_MESSAGE') NOT NULL DEFAULT 'PUBLIC_CHANNEL',
     created_by BIGINT UNSIGNED NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -200,7 +255,7 @@ CREATE TABLE chats (
 CREATE TABLE chat_members (
     chat_id BIGINT UNSIGNED NOT NULL,
     user_id BIGINT UNSIGNED NOT NULL,
-    last_read_message_id BIGINT UNSIGNED NULL,
+    last_read_message_id BIGINT UNSIGNED NULL,          -- O(1) unread watermark pointer
     is_muted BOOLEAN NOT NULL DEFAULT FALSE,
     joined_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -216,12 +271,35 @@ CREATE TABLE messages (
     content TEXT NOT NULL,
     attachment_url VARCHAR(2048) NULL,
     is_edited BOOLEAN NOT NULL DEFAULT FALSE,
-    deleted_at DATETIME NULL,
+    deleted_at DATETIME NULL,                           -- Soft delete for UI thread continuity
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     FOREIGN KEY (chat_id) REFERENCES chats (id) ON DELETE CASCADE,
     FOREIGN KEY (sender_id) REFERENCES users (id) ON DELETE RESTRICT,
     INDEX idx_messages_chronology (chat_id, id DESC)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- NEW: emoji reactions on messages
+CREATE TABLE message_reactions (
+    message_id BIGINT UNSIGNED NOT NULL,
+    user_id BIGINT UNSIGNED NOT NULL,
+    emoji VARCHAR(32) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (message_id, user_id, emoji),
+    FOREIGN KEY (message_id) REFERENCES messages (id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- NEW: pinned chat messages
+CREATE TABLE chat_pins (
+    chat_id BIGINT UNSIGNED NOT NULL,
+    message_id BIGINT UNSIGNED NOT NULL,
+    pinned_by BIGINT UNSIGNED NULL,
+    pinned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (chat_id, message_id),
+    FOREIGN KEY (chat_id) REFERENCES chats (id) ON DELETE CASCADE,
+    FOREIGN KEY (message_id) REFERENCES messages (id) ON DELETE CASCADE,
+    FOREIGN KEY (pinned_by) REFERENCES users (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- ============================================================================
@@ -269,13 +347,13 @@ DROP TABLE IF EXISTS notifications;
 CREATE TABLE notifications (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     recipient_id BIGINT UNSIGNED NOT NULL,
-    actor_id BIGINT UNSIGNED NULL,
+    actor_id BIGINT UNSIGNED NULL,                      -- NULL for automated GitHub webhook alerts
     type ENUM(
-        'TASK_ASSIGNED', 
-        'TASK_MOVED', 
-        'GITHUB_PR_LINKED', 
-        'ADMIN_ONBOARDING', 
-        'CHAT_MENTION', 
+        'TASK_ASSIGNED',
+        'TASK_MOVED',
+        'GITHUB_PR_LINKED',
+        'ADMIN_ONBOARDING',
+        'CHAT_MENTION',
         'SYSTEM_ALERT'
     ) NOT NULL,
     title VARCHAR(150) NOT NULL,
@@ -283,7 +361,7 @@ CREATE TABLE notifications (
     action_url VARCHAR(2048) NULL,
     is_read BOOLEAN NOT NULL DEFAULT FALSE,
     read_at DATETIME NULL,
-    sound_alert_played BOOLEAN NOT NULL DEFAULT FALSE,
+    sound_alert_played BOOLEAN NOT NULL DEFAULT FALSE,  -- In-app sound notification flag
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     FOREIGN KEY (recipient_id) REFERENCES users (id) ON DELETE CASCADE,
@@ -292,19 +370,21 @@ CREATE TABLE notifications (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- ============================================================================
--- 11. ACTIVITY LOG (POWERS DASHBOARD & ACTIVITY STREAM)
+-- 11. ACTIVITY LOG (Activity Stream, My Activities, Live Activity)
 -- ============================================================================
 DROP TABLE IF EXISTS activity_log;
 CREATE TABLE activity_log (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    type VARCHAR(50) NOT NULL,
-    actor_id BIGINT UNSIGNED NOT NULL,
-    entity_type VARCHAR(50) NOT NULL,
-    entity_ref VARCHAR(100) NOT NULL,
-    summary VARCHAR(255) NOT NULL,
+    actor_id BIGINT UNSIGNED NULL,                      -- NULL for system events
+    type ENUM('TASK_UPDATED', 'TASK_ASSIGNED', 'TASK_COMMENTED', 'GITHUB_COMMIT',
+              'PR_COMMENT', 'RESOURCE_ADDED', 'DISCUSSION_CREATED',
+              'PROFILE_UPDATED', 'SYSTEM') NOT NULL,
+    entity_type ENUM('TASK', 'RESOURCE', 'DISCUSSION', 'USER', 'CHAT', 'SYSTEM') NOT NULL,
+    entity_ref VARCHAR(100) NULL,                       -- task_code or public_id
+    summary VARCHAR(255) NOT NULL,                      -- "moved task #15 to Done"
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    FOREIGN KEY (actor_id) REFERENCES users (id) ON DELETE CASCADE,
+    FOREIGN KEY (actor_id) REFERENCES users (id) ON DELETE SET NULL,
     INDEX idx_activity_stream (created_at DESC),
     INDEX idx_activity_actor (actor_id, created_at DESC)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
