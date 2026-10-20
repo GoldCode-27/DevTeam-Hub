@@ -11,7 +11,7 @@ const authenticate = async (req, res, next) => {
     // 1. Resolve user ID from request headers (supports local testing toggle via 'x-user-id')
     const userId = req.headers['x-user-id'] || 1;
 
-    // 2. Fetch user identity
+    // 2. Fetch user identity from the database using the resolved ID
     const [users] = await pool.query(
       `SELECT id, public_id, username, first_name, last_name, email, status, last_active_at 
        FROM users 
@@ -19,13 +19,14 @@ const authenticate = async (req, res, next) => {
       [userId]
     );
 
+    // If the user does not exist or their account is suspended, throw an unauthenticated error
     if (!users.length || users[0].status !== 'ACTIVE') {
       return next(new AppError('User not found or account is suspended', 401, 'UNAUTHENTICATED'));
     }
 
     const user = users[0];
 
-    // 3. Fetch direct user permissions from user_permissions join permissions
+    // 3. Fetch direct user permissions by joining user_permissions and permissions tables
     const [permissions] = await pool.query(
       `SELECT p.slug 
        FROM permissions p
@@ -34,12 +35,14 @@ const authenticate = async (req, res, next) => {
       [user.id]
     );
 
-    // 4. Attach permission slugs array to user object (e.g. ['user:manage', 'task:create'])
+    // 4. Attach permission slugs array to the user object (e.g., ['user:manage', 'task:create'])
     user.permissions = permissions.map(row => row.slug);
     req.user = user;
 
+    // Proceed to the next middleware or controller
     next();
   } catch (error) {
+    // Catch any unexpected database or runtime errors and pass them to the global error handler
     next(error);
   }
 };
