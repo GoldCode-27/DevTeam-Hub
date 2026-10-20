@@ -2,11 +2,11 @@
 -- DEVTEAM-HUB FINAL DATABASE SCHEMA (22 tables)
 -- Base schema + migration 002 merged into one file.
 -- ============================================================================
-CREATE DATABASE IF NOT EXISTS devteam_hub
+CREATE DATABASE IF NOT EXISTS dev-team-hub
   CHARACTER SET utf8mb4
   COLLATE utf8mb4_general_ci;
 
-USE devteam_hub;
+USE dev-team-hub;
 
 -- Temporarily disable foreign key checks for clean recreation
 SET foreign_key_checks = 0;
