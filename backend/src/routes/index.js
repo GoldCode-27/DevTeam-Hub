@@ -1,7 +1,7 @@
 import express from 'express';
 import dashboardRoutes from './dashboardRoutes.js';
 import activityRoutes from './activityRoutes.js';
-
+import installRoutes from './install.routes.js'; // Import the install routes
 // Create a main router instance to aggregate all modular API routes
 const router = express.Router();
 
@@ -14,6 +14,8 @@ router.use('/dashboard', dashboardRoutes);
 // Mount activity routes under the '/activities' prefix (results in /api/activities)
 router.use('/activities', activityRoutes);
 
+// Mount install routes under the '/install' prefix (results in /api/install)
+router.use('/install', installRoutes); // Mount install routes
 // Export the master router to be mounted into the main server application
 export default router;
 

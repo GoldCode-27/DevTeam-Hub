@@ -27,8 +27,6 @@ app.use(morgan('dev'));
 // 4. Body Parser: Parses incoming request payloads formatted as JSON into req.body
 app.use(express.json());
 
-
-
 /**
  * Server Health Check Endpoint
  * Allows monitoring services and developers to verify the server is live and responding.
@@ -43,6 +41,7 @@ app.get('/health', (req, res) => {
 
 // Central API Routes (All modules prefixed with /api)
 app.use('/api', apiRoutes);
+// app.use('/router')
 
 // 1. 404 Handler: Catches all unmatched routes that slipped past previous endpoints
 app.use(notFoundHandler);

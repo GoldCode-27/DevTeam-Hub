@@ -4,9 +4,6 @@ import mysql from 'mysql2/promise';
 // Import dotenv to load environment variables from a .env file.
 import dotenv from 'dotenv';
 
-// Import the built-in Node.js path module to handle file paths.
-import path from 'path';
-
 // Load environment variables from the .env file.
 // import.meta.dirname gives the directory of the current module.
 // path.resolve() builds an absolute path to the .env file.
@@ -76,5 +73,10 @@ const pool = mysql.createPool({
   }
 })();
 
+async function safeQuery(sql, params) {
+  const rows = await pool.execute(sql, params);
+  return rows[0];
+}
+
 // Export the pool so other files can import and use it.
-export default pool;
+export default { pool, safeQuery };

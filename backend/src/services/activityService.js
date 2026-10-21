@@ -1,5 +1,5 @@
 import pool from '../config/db.js';
-
+import safeQuery from '../config/db.js';
 /**
  * Activity Aggregation & Stream Service
  * Aggregates task counters, weekly daily trends, and user/team activity logs.
@@ -10,7 +10,7 @@ export const getActivitiesData = async (currentUser, query) => {
   const filterType = query.type || null;
 
   // 1. Fetch task overview counters using single-pass conditional aggregation
-  const [taskRows] = await pool.query(
+  const [taskRows] = await safeQuery(
     `SELECT 
        COUNT(CASE WHEN assignee_id IS NOT NULL THEN 1 END) AS assigned,
        COUNT(CASE WHEN status = 'IN_PROGRESS' THEN 1 END) AS in_progress,
@@ -80,12 +80,12 @@ export const getActivitiesData = async (currentUser, query) => {
     type: act.type,
     actor: act.actor_public_id
       ? {
-          public_id: act.actor_public_id,
-          username: act.actor_username,
-          first_name: act.actor_first_name,
-          last_name: act.actor_last_name,
-          avatar_url: act.actor_avatar_url
-        }
+        public_id: act.actor_public_id,
+        username: act.actor_username,
+        first_name: act.actor_first_name,
+        last_name: act.actor_last_name,
+        avatar_url: act.actor_avatar_url
+      }
       : null,
     entity_type: act.entity_type,
     entity_ref: act.entity_ref,

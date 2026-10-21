@@ -1,13 +1,7 @@
 -- ============================================================================
 -- DEVTEAM-HUB FINAL DATABASE SCHEMA (22 tables)
--- Base schema + migration 002 merged into one file.
+-- Run against the database selected by DB_NAME in the backend configuration.
 -- ============================================================================
-CREATE DATABASE IF NOT EXISTS dev-team-hub
-  CHARACTER SET utf8mb4
-  COLLATE utf8mb4_general_ci;
-
-USE dev-team-hub;
-
 -- Temporarily disable foreign key checks for clean recreation
 SET foreign_key_checks = 0;
 
@@ -128,8 +122,8 @@ CREATE TABLE resources (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
     FOREIGN KEY (uploaded_by) REFERENCES users (id) ON DELETE RESTRICT,
-    INDEX idx_resources_guest (is_public, created_at DESC),
-    INDEX idx_resources_uploader (uploaded_by, created_at DESC),
+    INDEX idx_resources_guest (is_public, created_at),
+    INDEX idx_resources_uploader (uploaded_by, created_at),
     FULLTEXT INDEX idx_ft_resources (title, description)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -169,7 +163,7 @@ CREATE TABLE tasks (
     INDEX idx_tasks_kanban (status, position),
     INDEX idx_tasks_my_work (assignee_id, status),
     INDEX idx_tasks_due_date (due_date),
-    INDEX idx_tasks_guest (is_public, created_at DESC)
+    INDEX idx_tasks_guest (is_public, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- NEW: task tags (#Backend, #API on Kanban cards)
@@ -196,6 +190,7 @@ CREATE TABLE subtasks (
 
 -- NEW: task comment thread
 CREATE TABLE task_comments (
+    name VARCHAR(255) NOT NULL,
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     task_id BIGINT UNSIGNED NOT NULL,
     author_id BIGINT UNSIGNED NOT NULL,
@@ -228,7 +223,7 @@ CREATE TABLE task_github_events (
 
     FOREIGN KEY (task_id) REFERENCES tasks (id) ON DELETE CASCADE,
     UNIQUE KEY uq_task_github_event (task_id, event_type, external_ref),
-    INDEX idx_github_events_task (task_id, created_at DESC)
+    INDEX idx_github_events_task (task_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- ============================================================================
@@ -276,7 +271,7 @@ CREATE TABLE messages (
 
     FOREIGN KEY (chat_id) REFERENCES chats (id) ON DELETE CASCADE,
     FOREIGN KEY (sender_id) REFERENCES users (id) ON DELETE RESTRICT,
-    INDEX idx_messages_chronology (chat_id, id DESC)
+    INDEX idx_messages_chronology (chat_id, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- NEW: emoji reactions on messages
@@ -321,7 +316,7 @@ CREATE TABLE discussions (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
     FOREIGN KEY (author_id) REFERENCES users (id) ON DELETE RESTRICT,
-    INDEX idx_discussions_feed (is_pinned DESC, created_at DESC)
+    INDEX idx_discussions_feed (is_pinned, created_at DESC)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE comments (
@@ -366,7 +361,7 @@ CREATE TABLE notifications (
 
     FOREIGN KEY (recipient_id) REFERENCES users (id) ON DELETE CASCADE,
     FOREIGN KEY (actor_id) REFERENCES users (id) ON DELETE SET NULL,
-    INDEX idx_notifications_stream (recipient_id, is_read, created_at DESC)
+    INDEX idx_notifications_stream (recipient_id, is_read, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- ============================================================================
@@ -385,8 +380,8 @@ CREATE TABLE activity_log (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     FOREIGN KEY (actor_id) REFERENCES users (id) ON DELETE SET NULL,
-    INDEX idx_activity_stream (created_at DESC),
-    INDEX idx_activity_actor (actor_id, created_at DESC)
+    INDEX idx_activity_stream (created_at),
+    INDEX idx_activity_actor (actor_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Re-enable relational constraint checks

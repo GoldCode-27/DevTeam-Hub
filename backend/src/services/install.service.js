@@ -1,57 +1,125 @@
-// Import the query function from the db.config.js file 
-import conn from "../../../../..config/db.config";
-// Import the fs module to read our sql file  
 import fs from 'fs';
-// Write a function to create the database tables  
+import path from 'path';
+import { fileURLToPath } from 'url';
+import pool from '../config/db.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+function splitSqlStatements(sql) {
+  const statements = [];
+  let current = '';
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+
+  for (let i = 0; i < sql.length; i += 1) {
+    const char = sql[i];
+    const next = sql[i + 1];
+
+    if (char === "'" && !inDoubleQuote) {
+      if (inSingleQuote && next === "'") {
+        current += char + next;
+        i += 1;
+        continue;
+      }
+      inSingleQuote = !inSingleQuote;
+      current += char;
+      continue;
+    }
+
+    if (char === '"' && !inSingleQuote) {
+      if (inDoubleQuote && next === '"') {
+        current += char + next;
+        i += 1;
+        continue;
+      }
+      inDoubleQuote = !inDoubleQuote;
+      current += char;
+      continue;
+    }
+
+    if (!inSingleQuote && !inDoubleQuote) {
+      if (char === '-' && next === '-') {
+        while (i < sql.length && sql[i] !== '\n') {
+          i += 1;
+        }
+        continue;
+      }
+
+      if (char === '/' && next === '*') {
+        i += 2;
+        while (i < sql.length && !(sql[i] === '*' && sql[i + 1] === '/')) {
+          i += 1;
+        }
+        i += 1;
+        continue;
+      }
+
+      if (char === ';') {
+        const statement = current.trim();
+        if (statement) {
+          statements.push(statement);
+        }
+        current = '';
+        continue;
+      }
+    }
+
+    current += char;
+  }
+
+  const lastStatement = current.trim();
+  if (lastStatement) {
+    statements.push(lastStatement);
+  }
+
+  return statements;
+}
+
 async function install() {
-  // Create a variable to hold the path to the sql file  
-  const queryfile = __dirname + '../database/schema.sql';
-  // console.log(queryfile);
-  // Temporary variable, used to store all queries, the return message and the current query
-  let queries = [];
-  let finalMessage = {};
-  let templine = '';
-  // Read the sql file 
-  const lines = await fs.readFileSync(queryfile, 'utf-8').split('\n');
-  // Create a promise to handle the asynchronous reading of the file and storing of the queries in the variables  
-  const executed = await new Promise((resolve, reject) => {
-    // Iterate over all lines
-    lines.forEach((line) => {
-      if (line.trim().startsWith('--') || line.trim() === '') {
-        // Skip if it's a comment or empty line
-        return;
+  const schemaPath = path.resolve(__dirname, '../database/schema.sql');
+  let connection;
+  let destroyConnection = false;
+
+  try {
+    const sql = fs.readFileSync(schemaPath, 'utf-8');
+    const queries = splitSqlStatements(sql);
+
+    connection = await pool.getConnection();
+    await connection.query('SET FOREIGN_KEY_CHECKS = 0');
+
+    for (const query of queries) {
+      await connection.query(query);
+    }
+
+    await connection.query('SET FOREIGN_KEY_CHECKS = 1');
+
+    return {
+      message: 'All tables are created',
+      status: 200
+    };
+  } catch (error) {
+    let message = error.message || 'Not all tables are created';
+
+    if (connection) {
+      try {
+        await connection.query('SET FOREIGN_KEY_CHECKS = 1');
+      } catch (resetError) {
+        destroyConnection = true;
+        message += `; failed to restore foreign-key checks: ${resetError.message}`;
       }
-      templine += line;
-      if (line.trim().endsWith(';')) {
-        // If it has a semicolon at the end, it's the end of the query
-        // Prepare the individual query 
-        const sqlQuery = templine.trim();
-        // Add query to the list of queries 
-        queries.push(sqlQuery);
-        templine = '';
+    }
+
+    return { message, status: 500 };
+  } finally {
+    if (connection) {
+      if (destroyConnection) {
+        connection.destroy();
+      } else {
+        connection.release();
       }
-    });
-    resolve("Queries are added to the list");
-  });
-  //Loop through the queries and execute them one by one asynchronously  
-  for (let i = 0; i < queries.length; i++) {
-    try {
-      const result = await conn.query(queries[i]);
-      console.log("Table created");
-    } catch (err) {
-      // console.log("Err Occurred - Table not created");
-      finalMessage.message = "Not all tables are created";
     }
   }
-  // Prepare the final message to return to the controller 
-  if (!finalMessage.message) {
-    finalMessage.message = "All tables are created";
-    finalMessage.status = 200;
-  } else {
-    finalMessage.status = 500;
-  }
-  // Return the final message
-  return finalMessage;
 }
-// Export the install function for use in the controller
+
 export default { install };
