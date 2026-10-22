@@ -1,8 +1,9 @@
 import bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
-import pool from '../config/db.js';
+import db from '../config/db.js';
 import AppError from '../utils/appError.js';
 import {
+  ACCESS_TOKEN_EXPIRES,
   generateRefreshToken,
   getClientMeta,
   getRefreshExpiryDate,
@@ -10,13 +11,15 @@ import {
   signAccessToken
 } from '../utils/tokenUtils.js';
 
+const { pool, safeQuery } = db;
+
 const USER_SAFE_COLUMNS = `
   id, public_id, username, email, first_name, last_name,
   job_title, status, bio, current_focus, avatar_url, last_active_at
 `;
 
 const findUserByLogin = async (login) => {
-  const [rows] = await pool.query(
+  const rows = await safeQuery(
     `SELECT ${USER_SAFE_COLUMNS}, password_hash
      FROM users
      WHERE email = ? OR username = ?
@@ -27,7 +30,7 @@ const findUserByLogin = async (login) => {
 };
 
 const loadPermissions = async (userId) => {
-  const [rows] = await pool.query(
+  const rows = await safeQuery(
     `SELECT p.slug
      FROM permissions p
      INNER JOIN user_permissions up ON p.id = up.permission_id
@@ -52,21 +55,31 @@ const toPublicUser = (user, permissions = []) => ({
   permissions
 });
 
-const createSession = async (userId, req, connection = pool) => {
+const runQuery = async (sql, params, connection = null) => {
+  if (connection) {
+    const [result] = await connection.query(sql, params);
+    return result;
+  }
+  return safeQuery(sql, params);
+};
+
+const createSession = async (userId, req, connection = null) => {
   const refreshToken = generateRefreshToken();
   const refreshTokenHash = hashRefreshToken(refreshToken);
   const expiresAt = getRefreshExpiryDate();
   const { ipAddress, userAgent } = getClientMeta(req);
 
-  await connection.query(
+  await runQuery(
     `INSERT INTO sessions (user_id, refresh_token_hash, ip_address, user_agent, expires_at)
      VALUES (?, ?, ?, ?, ?)`,
-    [userId, refreshTokenHash, ipAddress, userAgent, expiresAt]
+    [userId, refreshTokenHash, ipAddress, userAgent, expiresAt],
+    connection
   );
 
-  await connection.query(
+  await runQuery(
     `UPDATE users SET last_active_at = NOW() WHERE id = ?`,
-    [userId]
+    [userId],
+    connection
   );
 
   return { refreshToken, expiresAt };
@@ -83,7 +96,7 @@ const buildAuthPayload = async (user, refreshToken, expiresAt) => {
   return {
     access_token: accessToken,
     token_type: 'Bearer',
-    expires_in: process.env.JWT_ACCESS_EXPIRES || '15m',
+    expires_in: ACCESS_TOKEN_EXPIRES,
     refresh_token: refreshToken,
     refresh_expires_at: expiresAt.toISOString(),
     user: toPublicUser(user, permissions)
@@ -132,8 +145,7 @@ export const register = async (userData, req) => {
       throw new AppError('Username or Email already exists', 409, 'DUPLICATE_ENTRY');
     }
 
-    const saltRounds = 10;
-    const passwordHash = await bcrypt.hash(password, saltRounds);
+    const passwordHash = await bcrypt.hash(password, 10);
     const publicId = uuidv4();
 
     const [result] = await connection.query(
@@ -154,11 +166,17 @@ export const register = async (userData, req) => {
     const userId = result.insertId;
 
     if (Array.isArray(skills) && skills.length > 0) {
-      const skillValues = skills.map((skill) => [userId, skill.trim()]);
-      await connection.query(
-        `INSERT INTO user_skills (user_id, skill) VALUES ?`,
-        [skillValues]
-      );
+      const skillValues = skills
+        .map((skill) => String(skill).trim())
+        .filter(Boolean)
+        .map((skill) => [userId, skill]);
+
+      if (skillValues.length > 0) {
+        await connection.query(
+          `INSERT INTO user_skills (user_id, skill) VALUES ?`,
+          [skillValues]
+        );
+      }
     }
 
     const [newUsers] = await connection.query(
@@ -196,7 +214,12 @@ export const login = async ({ login, password }, req) => {
     );
   }
 
-  const user = await findUserByLogin(login.trim());
+  const normalizedLogin = login.trim();
+  const lookup = normalizedLogin.includes('@')
+    ? normalizedLogin.toLowerCase()
+    : normalizedLogin;
+
+  const user = await findUserByLogin(lookup);
   if (!user) {
     throw new AppError('Invalid credentials', 401, 'UNAUTHENTICATED');
   }
@@ -214,7 +237,7 @@ export const login = async ({ login, password }, req) => {
     throw new AppError('Account onboarding is not complete', 403, 'FORBIDDEN');
   }
 
-  const { password_hash, ...safeUser } = user;
+  const { password_hash: _passwordHash, ...safeUser } = user;
   const { refreshToken, expiresAt } = await createSession(safeUser.id, req);
   return buildAuthPayload(safeUser, refreshToken, expiresAt);
 };
@@ -298,7 +321,7 @@ export const refresh = async ({ refresh_token }, req) => {
 };
 
 export const loadUserForAccessToken = async (userId) => {
-  const [users] = await pool.query(
+  const users = await safeQuery(
     `SELECT id, public_id, username, first_name, last_name, email, status, last_active_at
      FROM users
      WHERE id = ?`,
@@ -309,62 +332,64 @@ export const loadUserForAccessToken = async (userId) => {
     throw new AppError('User not found or account is suspended', 401, 'UNAUTHENTICATED');
   }
 
-  const user = users[0];
+  const { password_hash: _passwordHash, ...user } = users[0];
   user.permissions = await loadPermissions(user.id);
   return user;
 };
 
-/**
- * Logs out a user based on session management rules:
- * 1. If session_id is provided, revokes that specific session.
- * 2. If all_other_devices is true, revokes all other active sessions for the user.
- * 3. Otherwise, revokes the session matching the provided refresh token.
- * @param {Object} logoutData Object containing refresh_token, session_id, and all_other_devices flags.
- * @param {number} userId The internal database ID of the user performing the logout.
- * @returns {Promise<{success: boolean}>} Success status object.
- */
-export const logout = async ({ refresh_token, session_id, all_other_devices }, userId) => {
-  const connection = await pool.getConnection();
+export const logout = async (
+  { refresh_token, session_id, all_other_devices } = {},
+  userId
+) => {
+  if (!userId) {
+    throw new AppError('Authentication required', 401, 'UNAUTHENTICATED');
+  }
 
-  try {
-    // Case 1: Log out from all other devices (keeping current or revoking all valid ones)
-    if (all_other_devices && userId) {
-      if (session_id) {
-        // Revoke all sessions except the specified active session
-        await connection.query(
-          `UPDATE sessions SET is_revoked = TRUE WHERE user_id = ? AND id != ? AND is_revoked = FALSE`,
-          [userId, session_id]
-        );
-      } else {
-        // Revoke all sessions for this user
-        await connection.query(
-          `UPDATE sessions SET is_revoked = TRUE WHERE user_id = ? AND is_revoked = FALSE`,
-          [userId]
-        );
-      }
-      return { success: true };
+  const tokenHash = refresh_token ? hashRefreshToken(refresh_token) : null;
+
+  if (all_other_devices) {
+    if (session_id) {
+      await safeQuery(
+        `UPDATE sessions SET is_revoked = TRUE
+         WHERE user_id = ? AND id != ? AND is_revoked = FALSE`,
+        [userId, session_id]
+      );
+    } else if (tokenHash) {
+      await safeQuery(
+        `UPDATE sessions SET is_revoked = TRUE
+         WHERE user_id = ? AND refresh_token_hash != ? AND is_revoked = FALSE`,
+        [userId, tokenHash]
+      );
+    } else {
+      await safeQuery(
+        `UPDATE sessions SET is_revoked = TRUE
+         WHERE user_id = ? AND is_revoked = FALSE`,
+        [userId]
+      );
     }
 
-    // // Case 2: Revoke a specific session by its ID
-    // if (session_id && userId) {
-    //   await connection.query(
-    //     `UPDATE sessions SET is_revoked = TRUE WHERE id = ? AND user_id = ? AND is_revoked = FALSE`,
-    //     [session_id, userId]
-    //   );
-    //   return { success: true };
-    // }
-
-    // // Case 3: Standard logout using the refresh token (current session)
-    // if (refresh_token) {
-    //   const tokenHash = hashRefreshToken(refresh_token);
-    //   await connection.query(
-    //     `UPDATE sessions SET is_revoked = TRUE WHERE refresh_token_hash = ? AND is_revoked = FALSE`,
-    //     [tokenHash]
-    //   );
-    // }
-
     return { success: true };
-  } finally {
-    connection.release();
   }
+
+  if (session_id) {
+    await safeQuery(
+      `UPDATE sessions SET is_revoked = TRUE
+       WHERE id = ? AND user_id = ? AND is_revoked = FALSE`,
+      [session_id, userId]
+    );
+  } else if (tokenHash) {
+    await safeQuery(
+      `UPDATE sessions SET is_revoked = TRUE
+       WHERE refresh_token_hash = ? AND user_id = ? AND is_revoked = FALSE`,
+      [tokenHash, userId]
+    );
+  } else {
+    await safeQuery(
+      `UPDATE sessions SET is_revoked = TRUE
+       WHERE user_id = ? AND is_revoked = FALSE`,
+      [userId]
+    );
+  }
+
+  return { success: true };
 };

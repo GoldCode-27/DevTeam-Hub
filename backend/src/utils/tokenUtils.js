@@ -7,6 +7,7 @@ import jwt from 'jsonwebtoken';
  */
 
 export const REFRESH_COOKIE_NAME = 'refresh_token';
+export const ACCESS_TOKEN_EXPIRES = process.env.JWT_ACCESS_EXPIRES || '15m';
 
 export const hashRefreshToken = (token) =>
   crypto.createHash('sha256').update(token).digest('hex');
@@ -20,7 +21,7 @@ export const signAccessToken = (payload) => {
   }
 
   return jwt.sign(payload, secret, {
-    expiresIn: process.env.JWT_ACCESS_EXPIRES || '15m'
+    expiresIn: ACCESS_TOKEN_EXPIRES
   });
 };
 

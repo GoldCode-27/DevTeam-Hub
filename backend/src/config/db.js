@@ -9,7 +9,6 @@ import dotenv from 'dotenv';
 // path.resolve() builds an absolute path to the .env file.
 // '../../.env' means go up two directories, then find .env.
 dotenv.config({
-  path: path.resolve(import.meta.dirname, '../../.env')
 });
 
 /**

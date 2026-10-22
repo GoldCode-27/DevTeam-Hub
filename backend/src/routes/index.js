@@ -1,4 +1,5 @@
 import express from 'express';
+import authRoutes from './authRouts.js'; // Import the auth routes
 import dashboardRoutes from './dashboardRoutes.js';
 import activityRoutes from './activityRoutes.js';
 import installRoutes from './install.routes.js'; // Import the install routes
@@ -16,11 +17,13 @@ router.use('/activities', activityRoutes);
 
 // Mount install routes under the '/install' prefix (results in /api/install)
 router.use('/install', installRoutes); // Mount install routes
+
+// Mount auth routes under the '/auth' prefix (results in /api/auth)
+router.use('/auth', authRoutes); // Mount auth routes
+
 // Export the master router to be mounted into the main server application
+
 export default router;
-
-
-
 
 
 /*git commit -m "feat(utils): add shared pagination and activity notification helpers"
