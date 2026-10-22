@@ -1,47 +1,104 @@
-import pool from '../config/db.js';
-import AppError from '../utils/appError.js';
+import AppError from "../utils/appError.js";
+ import { loadUserForAccessToken } from "../services/authService.js";
+ import { verifyAccessToken } from "../utils/tokenUtils.js";
 
 /**
- * Authentication & Identity Middleware
- * Resolves the authenticated user from the database and attaches direct permission slugs.
- * Falls back to Seed User 1 (Alex Chen - Lead/Admin) for local development if no header is present.
+ * Expects: Authorization: Bearer <access_token> (short-lived JWT)
+ * Refresh tokens are never accepted here — only on /api/auth/refresh.
  */
-const authenticate = async (req, res, next) => {
+export const authenticate = async (req, res, next) => {
   try {
-    // 1. Resolve user ID from request headers (supports local testing toggle via 'x-user-id')
-    const userId = req.headers['x-user-id'] || 1;
-
-    // 2. Fetch user identity
-    const [users] = await pool.query(
-      `SELECT id, public_id, username, first_name, last_name, email, status, last_active_at 
-       FROM users 
-       WHERE id = ?`,
-      [userId]
-    );
-
-    if (!users.length || users[0].status !== 'ACTIVE') {
-      return next(new AppError('User not found or account is suspended', 401, 'UNAUTHENTICATED'));
+    const header = req.headers.authorization;
+    if (!header || !header.startsWith("Bearer ")) {
+      return next(
+        new AppError(
+          "Missing or invalid Authorization header",
+          401,
+          "UNAUTHENTICATED",
+        ),
+      );
     }
 
-    const user = users[0];
+    const accessToken = header.slice(7).trim();
+    if (!accessToken) {
+      return next(new AppError("Missing access token", 401, "UNAUTHENTICATED"));
+    }
 
-    // 3. Fetch direct user permissions from user_permissions join permissions
-    const [permissions] = await pool.query(
-      `SELECT p.slug 
-       FROM permissions p
-       INNER JOIN user_permissions up ON p.id = up.permission_id
-       WHERE up.user_id = ?`,
-      [user.id]
-    );
+    let payload;
+    try {
+      payload = verifyAccessToken(accessToken);
+    } catch {
+      return next(
+        new AppError("Invalid or expired access token", 401, "UNAUTHENTICATED"),
+      );
+    }
 
-    // 4. Attach permission slugs array to user object (e.g. ['user:manage', 'task:create'])
-    user.permissions = permissions.map(row => row.slug);
-    req.user = user;
+    if (!payload?.uid) {
+      return next(
+        new AppError("Invalid access token payload", 401, "UNAUTHENTICATED"),
+      );
+    }
 
+    req.user = await loadUserForAccessToken(payload.uid);
     next();
   } catch (error) {
+    if (error instanceof AppError) {
+      return next(error);
+    }
     next(error);
   }
+};
+
+/**
+ * Checks if the authenticated user has the required permission(s)
+ * directly from `req.user.permissions` (loaded in memory during authentication).
+ *
+ * @param {string|string[]} requiredPermissions - Single permission or array of permissions required.
+ * @param {boolean} [requireAll=false] - If true, user must have ALL permissions. If false, ANY permission suffices.
+ */
+export const requirePermission = (requiredPermissions, requireAll = false) => {
+  return (req, res, next) => {
+    try {
+      if (!req.user || !req.user.id) {
+        return next(new AppError("Unauthorized", 401, "UNAUTHENTICATED"));
+      }
+
+      const userPermissions = req.user.permissions || [];
+      const permissionsToCheck = Array.isArray(requiredPermissions)
+        ? requiredPermissions
+        : [requiredPermissions];
+
+      if (permissionsToCheck.length === 0) {
+        return next();
+      }
+
+      let hasPermission = false;
+
+      if (requireAll) {
+        hasPermission = permissionsToCheck.every((p) =>
+          userPermissions.includes(p),
+        );
+      } else {
+        hasPermission = permissionsToCheck.some((p) =>
+          userPermissions.includes(p),
+        );
+      }
+
+      if (!hasPermission) {
+        return next(
+          new AppError(
+            `Forbidden: Missing required permissions (${permissionsToCheck.join(", ")})`,
+            403,
+            "FORBIDDEN",
+          ),
+        );
+      }
+
+      next();
+    } catch (error) {
+      next(error);
+    }
+  };
 };
 
 export default authenticate;
