@@ -59,7 +59,7 @@ export const getRefreshCookieOptions = (expiresAt) => {
     httpOnly: true,
     secure,
     sameSite: secure ? 'none' : 'lax',
-    path: '/api/auth',
+    path: '/',
     expires: expiresAt instanceof Date ? expiresAt : new Date(expiresAt)
   };
 };
