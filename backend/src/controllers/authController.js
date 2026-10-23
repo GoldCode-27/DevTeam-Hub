@@ -1,7 +1,7 @@
 import {
   // getCurrentUser,
   login,
-   logout,
+  logout,
   refresh,
   register // <-- register services
 } from '../services/authService.js';
@@ -42,7 +42,7 @@ const stripRefreshFromBody = (data) => {
 //     const { publicPayload, refresh_token, refresh_expires_at } = stripRefreshFromBody(data);
 //     setRefreshCookie(res, refresh_token, refresh_expires_at);
 
-  
+
 //     /*
 //     if (req.body.return_refresh_token === true) {
 //       res.status(201).json({ ...publicPayload, refresh_token, refresh_expires_at });
@@ -59,12 +59,12 @@ const stripRefreshFromBody = (data) => {
 
 export const registerHandler = async (req, res, next) => {
   try {
-    
+
     const newUser = await register(req.body, req);
 
-    res.status(201).json({ 
+    res.status(201).json({
       message: "User registered successfully by admin",
-      user: newUser 
+      user: newUser
     });
   } catch (error) {
     next(error);
@@ -128,8 +128,8 @@ export const logoutHandler = async (req, res, next) => {
 
     // 1. all_other_devices = true
     if (all_other_devices) {
-      await logoutAllOtherDevices(userId, req.session_id); 
-    } 
+      await logoutAllOtherDevices(userId, req.session_id);
+    }
     // // 2. if some  session_id 
     // else if (session_id) {
     //   await logoutSessionById(session_id, userId);
@@ -141,12 +141,14 @@ export const logoutHandler = async (req, res, next) => {
     }
 
     clearRefreshCookie(res);
-    res.status(204).send(); 
+    res.status(204).send();
   } catch (error) {
     clearRefreshCookie(res);
     next(error);
   }
 };
+
+
 // export const meHandler = async (req, res, next) => {
 //   try {
 //     const data = await getCurrentUser(req.user.id);

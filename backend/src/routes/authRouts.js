@@ -6,7 +6,7 @@ import {
   // meHandler,
   refreshHandler
 } from '../controllers/authController.js';
-import {authenticate,requirePermission} from '../middlewares/authMiddleware.js';
+import { authenticate, requirePermission } from '../middlewares/authMiddleware.js';
 import {
   loginRateLimiter,
   refreshRateLimiter
@@ -29,12 +29,7 @@ const router = express.Router();
 // 1. authenticate 
 // 2. requirePermission('user:manage') 
 
-router.post(
-  '/register', 
-  authenticate, 
-  requirePermission('user:manage'), 
-  registerHandler
-);
+router.post('/register', authenticate, requirePermission('user:manage'), registerHandler);
 router.post('/login', loginRateLimiter, loginHandler);
 router.post('/refresh', refreshRateLimiter, refreshHandler);
 router.post('/logout', authenticate, logoutHandler);

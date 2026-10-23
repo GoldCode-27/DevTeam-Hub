@@ -3,14 +3,12 @@ import mysql from 'mysql2/promise';
 
 // Import dotenv to load environment variables from a .env file.
 import dotenv from 'dotenv';
+dotenv.config();
 
 // Load environment variables from the .env file.
 // import.meta.dirname gives the directory of the current module.
 // path.resolve() builds an absolute path to the .env file.
 // '../../.env' means go up two directories, then find .env.
-dotenv.config({
-  path: path.resolve(import.meta.dirname, '../../.env')
-});
 
 /**
  * MySQL Connection Pool Configuration.
