@@ -5,12 +5,13 @@ import morgan from 'morgan';
 import apiRoutes from './routes/index.js';
 import errorHandler from './middlewares/errorMiddleware.js';
 import notFoundHandler from './middlewares/notFoundMiddleware.js';
-
+import cookieParser from 'cookie-parser';
 /**
  * Express Application Configuration
  * Central pipeline that mounts security, parsing, logging, routes, and error handling.
  */
 const app = express();
+app.use(cookieParser());
 
 // 1. Security Headers: Sets secure HTTP response headers against common web vulnerabilities
 app.use(helmet());

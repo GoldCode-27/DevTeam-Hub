@@ -9,6 +9,8 @@ dotenv.config();
 // import.meta.dirname gives the directory of the current module.
 // path.resolve() builds an absolute path to the .env file.
 // '../../.env' means go up two directories, then find .env.
+dotenv.config({
+});
 
 /**
  * MySQL Connection Pool Configuration.
