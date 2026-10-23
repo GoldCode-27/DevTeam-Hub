@@ -1,4 +1,4 @@
-import { login, logout, refresh, register } from '../services/authService.js';
+import { googleLogin, login, logout, refresh, register } from '../services/authService.js';
 import {
   REFRESH_COOKIE_NAME,
   clearRefreshCookieOptions,
@@ -7,8 +7,7 @@ import {
 
 /**
  * Auth Controller (Developer 2)
- * Sets refresh token in an httpOnly cookie;
- *  returns access JWT in the JSON body.
+ * Sets refresh token in an httpOnly cookie; returns access JWT in the JSON body.
  */
 
 const readRefreshToken = (req) =>
@@ -35,8 +34,22 @@ const sendAuthResponse = (res, data, statusCode) => {
 
 export const registerHandler = async (req, res, next) => {
   try {
-    const data = await register(req.body, req);
-    sendAuthResponse(res, data, 201);
+    const data = await register(req.body);
+    res.status(201).json(data);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const googleAuthHandler = async (req, res, next) => {
+  try {
+    const data = await googleLogin(
+      {
+        email: req.body?.email ?? req.body?.googleProfile?.email
+      },
+      req
+    );
+    sendAuthResponse(res, data, 200);
   } catch (error) {
     next(error);
   }

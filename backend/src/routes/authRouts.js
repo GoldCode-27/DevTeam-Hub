@@ -1,6 +1,7 @@
 import express from 'express';
 import {
   registerHandler,
+  googleAuthHandler,
   loginHandler,
   logoutHandler,
   refreshHandler
@@ -18,6 +19,7 @@ const router = express.Router();
  * Access JWT (Bearer) + rotating refresh token (httpOnly cookie)
  *
  * POST /api/auth/register
+ * POST /api/auth/google
  * POST /api/auth/login
  * POST /api/auth/refresh
  * POST /api/auth/logout
@@ -29,6 +31,7 @@ router.post(
   requirePermission('user:manage'),
   registerHandler
 );
+router.post('/google', loginRateLimiter, googleAuthHandler);
 router.post('/login', loginRateLimiter, loginHandler);
 router.post('/refresh', refreshRateLimiter, refreshHandler);
 router.post('/logout', authenticate, logoutHandler);

@@ -1,7 +1,9 @@
+import crypto from 'crypto';
 import bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 import db from '../config/db.js';
 import AppError from '../utils/appError.js';
+import { sendWelcomeEmail } from '../utils/emailService.js';
 import {
   ACCESS_TOKEN_EXPIRES,
   generateRefreshToken,
@@ -11,6 +13,7 @@ import {
   signAccessToken
 } from '../utils/tokenUtils.js';
 
+// Destructure safeQuery and pool from db.js
 const { pool, safeQuery } = db;
 
 const USER_SAFE_COLUMNS = `
@@ -103,11 +106,10 @@ const buildAuthPayload = async (user, refreshToken, expiresAt) => {
   };
 };
 
-export const register = async (userData, req) => {
+export const register = async (userData) => {
   const {
     username,
     email,
-    password,
     first_name,
     last_name,
     job_title,
@@ -115,7 +117,7 @@ export const register = async (userData, req) => {
     skills = []
   } = userData;
 
-  if (!username || !email || !password || !first_name || !last_name) {
+  if (!username || !email || !first_name || !last_name) {
     throw new AppError(
       'Missing required registration fields',
       400,
@@ -123,7 +125,6 @@ export const register = async (userData, req) => {
       [
         ...(!username ? [{ field: 'username', message: 'Username is required' }] : []),
         ...(!email ? [{ field: 'email', message: 'Email is required' }] : []),
-        ...(!password ? [{ field: 'password', message: 'Password is required' }] : []),
         ...(!first_name ? [{ field: 'first_name', message: 'First name is required' }] : []),
         ...(!last_name ? [{ field: 'last_name', message: 'Last name is required' }] : [])
       ]
@@ -145,7 +146,8 @@ export const register = async (userData, req) => {
       throw new AppError('Username or Email already exists', 409, 'DUPLICATE_ENTRY');
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const tempPassword = crypto.randomBytes(4).toString('hex');
+    const passwordHash = await bcrypt.hash(tempPassword, 10);
     const publicId = uuidv4();
 
     const [result] = await connection.query(
@@ -185,12 +187,16 @@ export const register = async (userData, req) => {
     );
     const newUser = newUsers[0];
 
-    const { refreshToken, expiresAt } = await createSession(userId, req, connection);
+    await sendWelcomeEmail(email.trim().toLowerCase(), tempPassword);
 
     await connection.commit();
     committed = true;
 
-    return buildAuthPayload(newUser, refreshToken, expiresAt);
+    return {
+      success: true,
+      message: 'User registered successfully by admin and temporary password email sent.',
+      user: toPublicUser(newUser)
+    };
   } catch (error) {
     if (!committed) {
       await connection.rollback();
@@ -199,6 +205,36 @@ export const register = async (userData, req) => {
   } finally {
     connection.release();
   }
+};
+
+export const googleLogin = async (googleProfile = {}, req) => {
+  const email = googleProfile.email;
+
+  if (!email) {
+    throw new AppError(
+      'Email is required',
+      400,
+      'VALIDATION_ERROR',
+      [{ field: 'email', message: 'Google account email is required' }]
+    );
+  }
+
+  const user = await findUserByLogin(email.trim().toLowerCase());
+  if (!user) {
+    throw new AppError(
+      'Access Denied: Account not pre-registered by admin',
+      403,
+      'FORBIDDEN'
+    );
+  }
+
+  if (user.status === 'SUSPENDED') {
+    throw new AppError('Account is suspended', 403, 'FORBIDDEN');
+  }
+
+  const { password_hash: _passwordHash, ...safeUser } = user;
+  const { refreshToken, expiresAt } = await createSession(safeUser.id, req);
+  return buildAuthPayload(safeUser, refreshToken, expiresAt);
 };
 
 export const login = async ({ login, password }, req) => {
