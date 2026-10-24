@@ -43,18 +43,14 @@ export const registerHandler = async (req, res, next) => {
 
 export const googleAuthHandler = async (req, res, next) => {
   try {
-    const data = await googleLogin(
-      {
-        email: req.body?.email ?? req.body?.googleProfile?.email
-      },
-      req
-    );
+    // Postman ወይም Frontend የሚልከውን idToken ወይም body በቀጥታ ወደ googleLogin እንልካለን
+    const data = await googleLogin(req.body, req);
+    
     sendAuthResponse(res, data, 200);
   } catch (error) {
     next(error);
   }
 };
-
 export const loginHandler = async (req, res, next) => {
   try {
     const data = await login(

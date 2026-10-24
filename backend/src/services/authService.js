@@ -1,17 +1,13 @@
-import crypto from 'crypto';
-import bcrypt from 'bcrypt';
-import { v4 as uuidv4 } from 'uuid';
-import db from '../config/db.js';
-import AppError from '../utils/appError.js';
-import { sendWelcomeEmail } from '../utils/emailService.js';
+import crypto from "crypto";
+import bcrypt from "bcrypt";
+import { v4 as uuidv4 } from "uuid";
+import db from "../config/db.js";
+import AppError from "../utils/appError.js";
+import { sendWelcomeEmail } from "../utils/emailService.js";
 import {
-  ACCESS_TOKEN_EXPIRES,
-  generateRefreshToken,
-  getClientMeta,
-  getRefreshExpiryDate,
-  hashRefreshToken,
-  signAccessToken
-} from '../utils/tokenUtils.js';
+  ACCESS_TOKEN_EXPIRES,generateRefreshToken,getClientMeta,getRefreshExpiryDate,hashRefreshToken,signAccessToken,
+} from "../utils/tokenUtils.js";
+import { verifyGoogleIdToken } from "../utils/googleUtils.js"; // የጎግል ቬርፊኬሽን ፋይልህ የሚገኝበት ቦታ
 
 // Destructure safeQuery and pool from db.js
 const { pool, safeQuery } = db;
@@ -27,7 +23,7 @@ const findUserByLogin = async (login) => {
      FROM users
      WHERE email = ? OR username = ?
      LIMIT 1`,
-    [login, login]
+    [login, login],
   );
   return rows[0] || null;
 };
@@ -38,7 +34,7 @@ const loadPermissions = async (userId) => {
      FROM permissions p
      INNER JOIN user_permissions up ON p.id = up.permission_id
      WHERE up.user_id = ?`,
-    [userId]
+    [userId],
   );
   return rows.map((row) => row.slug);
 };
@@ -55,7 +51,7 @@ const toPublicUser = (user, permissions = []) => ({
   current_focus: user.current_focus,
   avatar_url: user.avatar_url,
   last_active_at: user.last_active_at,
-  permissions
+  permissions,
 });
 
 const runQuery = async (sql, params, connection = null) => {
@@ -76,13 +72,13 @@ const createSession = async (userId, req, connection = null) => {
     `INSERT INTO sessions (user_id, refresh_token_hash, ip_address, user_agent, expires_at)
      VALUES (?, ?, ?, ?, ?)`,
     [userId, refreshTokenHash, ipAddress, userAgent, expiresAt],
-    connection
+    connection,
   );
 
   await runQuery(
     `UPDATE users SET last_active_at = NOW() WHERE id = ?`,
     [userId],
-    connection
+    connection,
   );
 
   return { refreshToken, expiresAt };
@@ -93,16 +89,16 @@ const buildAuthPayload = async (user, refreshToken, expiresAt) => {
   const accessToken = signAccessToken({
     sub: user.public_id,
     uid: user.id,
-    username: user.username
+    username: user.username,
   });
 
   return {
     access_token: accessToken,
-    token_type: 'Bearer',
+    token_type: "Bearer",
     expires_in: ACCESS_TOKEN_EXPIRES,
     refresh_token: refreshToken,
     refresh_expires_at: expiresAt.toISOString(),
-    user: toPublicUser(user, permissions)
+    user: toPublicUser(user, permissions),
   };
 };
 
@@ -114,20 +110,26 @@ export const register = async (userData) => {
     last_name,
     job_title,
     bio,
-    skills = []
+    skills = [],
   } = userData;
 
   if (!username || !email || !first_name || !last_name) {
     throw new AppError(
-      'Missing required registration fields',
+      "Missing required registration fields",
       400,
-      'VALIDATION_ERROR',
+      "VALIDATION_ERROR",
       [
-        ...(!username ? [{ field: 'username', message: 'Username is required' }] : []),
-        ...(!email ? [{ field: 'email', message: 'Email is required' }] : []),
-        ...(!first_name ? [{ field: 'first_name', message: 'First name is required' }] : []),
-        ...(!last_name ? [{ field: 'last_name', message: 'Last name is required' }] : [])
-      ]
+        ...(!username
+          ? [{ field: "username", message: "Username is required" }]
+          : []),
+        ...(!email ? [{ field: "email", message: "Email is required" }] : []),
+        ...(!first_name
+          ? [{ field: "first_name", message: "First name is required" }]
+          : []),
+        ...(!last_name
+          ? [{ field: "last_name", message: "Last name is required" }]
+          : []),
+      ],
     );
   }
 
@@ -139,14 +141,18 @@ export const register = async (userData) => {
 
     const [existing] = await connection.query(
       `SELECT id FROM users WHERE email = ? OR username = ? LIMIT 1`,
-      [email.trim().toLowerCase(), username.trim()]
+      [email.trim().toLowerCase(), username.trim()],
     );
 
     if (existing.length > 0) {
-      throw new AppError('Username or Email already exists', 409, 'DUPLICATE_ENTRY');
+      throw new AppError(
+        "Username or Email already exists",
+        409,
+        "DUPLICATE_ENTRY",
+      );
     }
 
-    const tempPassword = crypto.randomBytes(4).toString('hex');
+    const tempPassword = crypto.randomBytes(4).toString("hex");
     const passwordHash = await bcrypt.hash(tempPassword, 10);
     const publicId = uuidv4();
 
@@ -161,8 +167,8 @@ export const register = async (userData) => {
         first_name.trim(),
         last_name.trim(),
         job_title || null,
-        bio || null
-      ]
+        bio || null,
+      ],
     );
 
     const userId = result.insertId;
@@ -176,14 +182,14 @@ export const register = async (userData) => {
       if (skillValues.length > 0) {
         await connection.query(
           `INSERT INTO user_skills (user_id, skill) VALUES ?`,
-          [skillValues]
+          [skillValues],
         );
       }
     }
 
     const [newUsers] = await connection.query(
       `SELECT ${USER_SAFE_COLUMNS} FROM users WHERE id = ?`,
-      [userId]
+      [userId],
     );
     const newUser = newUsers[0];
 
@@ -194,8 +200,9 @@ export const register = async (userData) => {
 
     return {
       success: true,
-      message: 'User registered successfully by admin and temporary password email sent.',
-      user: toPublicUser(newUser)
+      message:
+        "User registered successfully by admin and temporary password email sent.",
+      user: toPublicUser(newUser),
     };
   } catch (error) {
     if (!committed) {
@@ -207,70 +214,79 @@ export const register = async (userData) => {
   }
 };
 
-export const googleLogin = async (googleProfile = {}, req) => {
-  const email = googleProfile.email;
+export const googleLogin = async (payload = {}, req) => {
+  // 1. check if the idToken is provided in the payload 
+  if (!payload.idToken) {
+    throw new AppError("Google ID token is required", 400, "VALIDATION_ERROR", [
+      { field: "idToken", message: "idToken field is required for Google sign-in" }
+    ]);
+  }
+
+  // 2. compare the provided idToken with the one generated by Google to verify its authenticity
+  const googleProfile = await verifyGoogleIdToken(payload.idToken);
+  const email = googleProfile?.email;
 
   if (!email) {
-    throw new AppError(
-      'Email is required',
-      400,
-      'VALIDATION_ERROR',
-      [{ field: 'email', message: 'Google account email is required' }]
-    );
+    throw new AppError("Email is required", 400, "VALIDATION_ERROR", [
+      { field: "email", message: "Google account email is required" },
+    ]);
   }
 
   const user = await findUserByLogin(email.trim().toLowerCase());
   if (!user) {
     throw new AppError(
-      'Access Denied: Account not pre-registered by admin',
+      "Access Denied: Account not pre-registered by admin",
       403,
-      'FORBIDDEN'
+      "FORBIDDEN",
     );
   }
 
-  if (user.status === 'SUSPENDED') {
-    throw new AppError('Account is suspended', 403, 'FORBIDDEN');
+  if (user.status === "SUSPENDED") {
+    throw new AppError("Account is suspended", 403, "FORBIDDEN");
   }
 
   const { password_hash: _passwordHash, ...safeUser } = user;
   const { refreshToken, expiresAt } = await createSession(safeUser.id, req);
   return buildAuthPayload(safeUser, refreshToken, expiresAt);
 };
-
 export const login = async ({ login, password }, req) => {
   if (!login || !password) {
     throw new AppError(
-      'Login and password are required',
+      "Login and password are required",
       400,
-      'VALIDATION_ERROR',
+      "VALIDATION_ERROR",
       [
-        ...(!login ? [{ field: 'login', message: 'Email or username is required' }] : []),
-        ...(!password ? [{ field: 'password', message: 'Password is required' }] : [])
-      ]
+        ...(!login
+          ? [{ field: "login", message: "Email or username is required" }]
+          : []),
+        ...(!password
+          ? [{ field: "password", message: "Password is required" }]
+          : []),
+      ],
     );
   }
 
   const normalizedLogin = login.trim();
-  const lookup = normalizedLogin.includes('@')
+  const lookup = normalizedLogin.includes("@")
     ? normalizedLogin.toLowerCase()
     : normalizedLogin;
 
   const user = await findUserByLogin(lookup);
   if (!user) {
-    throw new AppError('Invalid credentials', 401, 'UNAUTHENTICATED');
+    throw new AppError("Invalid credentials", 401, "UNAUTHENTICATED");
   }
 
   const passwordOk = await bcrypt.compare(password, user.password_hash);
   if (!passwordOk) {
-    throw new AppError('Invalid credentials', 401, 'UNAUTHENTICATED');
+    throw new AppError("Invalid credentials", 401, "UNAUTHENTICATED");
   }
 
-  if (user.status === 'SUSPENDED') {
-    throw new AppError('Account is suspended', 403, 'FORBIDDEN');
+  if (user.status === "SUSPENDED") {
+    throw new AppError("Account is suspended", 403, "FORBIDDEN");
   }
 
-  if (user.status === 'PENDING_ONBOARDING') {
-    throw new AppError('Account onboarding is not complete', 403, 'FORBIDDEN');
+  if (user.status === "PENDING_ONBOARDING") {
+    throw new AppError("Account onboarding is not complete", 403, "FORBIDDEN");
   }
 
   const { password_hash: _passwordHash, ...safeUser } = user;
@@ -280,12 +296,9 @@ export const login = async ({ login, password }, req) => {
 
 export const refresh = async ({ refresh_token }, req) => {
   if (!refresh_token) {
-    throw new AppError(
-      'Refresh token is required',
-      400,
-      'VALIDATION_ERROR',
-      [{ field: 'refresh_token', message: 'Refresh token is required' }]
-    );
+    throw new AppError("Refresh token is required", 400, "VALIDATION_ERROR", [
+      { field: "refresh_token", message: "Refresh token is required" },
+    ]);
   }
 
   const tokenHash = hashRefreshToken(refresh_token);
@@ -304,44 +317,56 @@ export const refresh = async ({ refresh_token }, req) => {
        WHERE s.refresh_token_hash = ?
        LIMIT 1
        FOR UPDATE`,
-      [tokenHash]
+      [tokenHash],
     );
 
     const session = sessions[0];
     if (!session) {
-      throw new AppError('Invalid refresh token', 401, 'UNAUTHENTICATED');
+      throw new AppError("Invalid refresh token", 401, "UNAUTHENTICATED");
     }
 
     if (session.is_revoked) {
       await connection.query(
         `UPDATE sessions SET is_revoked = TRUE WHERE user_id = ? AND is_revoked = FALSE`,
-        [session.user_id]
+        [session.user_id],
       );
       await connection.commit();
       committed = true;
-      throw new AppError('Refresh token has been revoked', 401, 'UNAUTHENTICATED');
+      throw new AppError(
+        "Refresh token has been revoked",
+        401,
+        "UNAUTHENTICATED",
+      );
     }
 
     if (new Date(session.expires_at) <= new Date()) {
       await connection.query(
         `UPDATE sessions SET is_revoked = TRUE WHERE id = ?`,
-        [session.session_id]
+        [session.session_id],
       );
       await connection.commit();
       committed = true;
-      throw new AppError('Refresh token has expired', 401, 'UNAUTHENTICATED');
+      throw new AppError("Refresh token has expired", 401, "UNAUTHENTICATED");
     }
 
-    if (session.status !== 'ACTIVE') {
-      throw new AppError('User not found or account is suspended', 401, 'UNAUTHENTICATED');
+    if (session.status !== "ACTIVE") {
+      throw new AppError(
+        "User not found or account is suspended",
+        401,
+        "UNAUTHENTICATED",
+      );
     }
 
     await connection.query(
       `UPDATE sessions SET is_revoked = TRUE WHERE id = ?`,
-      [session.session_id]
+      [session.session_id],
     );
 
-    const { refreshToken, expiresAt } = await createSession(session.user_id, req, connection);
+    const { refreshToken, expiresAt } = await createSession(
+      session.user_id,
+      req,
+      connection,
+    );
     await connection.commit();
     committed = true;
 
@@ -361,11 +386,15 @@ export const loadUserForAccessToken = async (userId) => {
     `SELECT id, public_id, username, first_name, last_name, email, status, last_active_at
      FROM users
      WHERE id = ?`,
-    [userId]
+    [userId],
   );
 
-  if (!users.length || users[0].status !== 'ACTIVE') {
-    throw new AppError('User not found or account is suspended', 401, 'UNAUTHENTICATED');
+  if (!users.length || users[0].status !== "ACTIVE") {
+    throw new AppError(
+      "User not found or account is suspended",
+      401,
+      "UNAUTHENTICATED",
+    );
   }
 
   const { password_hash: _passwordHash, ...user } = users[0];
@@ -375,10 +404,10 @@ export const loadUserForAccessToken = async (userId) => {
 
 export const logout = async (
   { refresh_token, session_id, all_other_devices } = {},
-  userId
+  userId,
 ) => {
   if (!userId) {
-    throw new AppError('Authentication required', 401, 'UNAUTHENTICATED');
+    throw new AppError("Authentication required", 401, "UNAUTHENTICATED");
   }
 
   const tokenHash = refresh_token ? hashRefreshToken(refresh_token) : null;
@@ -388,19 +417,19 @@ export const logout = async (
       await safeQuery(
         `UPDATE sessions SET is_revoked = TRUE
          WHERE user_id = ? AND id != ? AND is_revoked = FALSE`,
-        [userId, session_id]
+        [userId, session_id],
       );
     } else if (tokenHash) {
       await safeQuery(
         `UPDATE sessions SET is_revoked = TRUE
          WHERE user_id = ? AND refresh_token_hash != ? AND is_revoked = FALSE`,
-        [userId, tokenHash]
+        [userId, tokenHash],
       );
     } else {
       await safeQuery(
         `UPDATE sessions SET is_revoked = TRUE
          WHERE user_id = ? AND is_revoked = FALSE`,
-        [userId]
+        [userId],
       );
     }
 
@@ -411,19 +440,19 @@ export const logout = async (
     await safeQuery(
       `UPDATE sessions SET is_revoked = TRUE
        WHERE id = ? AND user_id = ? AND is_revoked = FALSE`,
-      [session_id, userId]
+      [session_id, userId],
     );
   } else if (tokenHash) {
     await safeQuery(
       `UPDATE sessions SET is_revoked = TRUE
        WHERE refresh_token_hash = ? AND user_id = ? AND is_revoked = FALSE`,
-      [tokenHash, userId]
+      [tokenHash, userId],
     );
   } else {
     await safeQuery(
       `UPDATE sessions SET is_revoked = TRUE
        WHERE user_id = ? AND is_revoked = FALSE`,
-      [userId]
+      [userId],
     );
   }
 

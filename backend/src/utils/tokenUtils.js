@@ -73,6 +73,6 @@ export const clearRefreshCookieOptions = () => {
     httpOnly: true,
     secure,
     sameSite: secure ? 'none' : 'lax',
-    path: '/api/auth'
+    path: '/'
   };
 };
