@@ -7,8 +7,7 @@ import { sendWelcomeEmail } from "../utils/emailService.js";
 import {
   ACCESS_TOKEN_EXPIRES,generateRefreshToken,getClientMeta,getRefreshExpiryDate,hashRefreshToken,signAccessToken,
 } from "../utils/tokenUtils.js";
-import { verifyGoogleIdToken } from "../utils/googleUtils.js"; // የጎግል ቬርፊኬሽን ፋይልህ የሚገኝበት ቦታ
-
+import { verifyGoogleIdToken } from "../utils/googleUtils.js"; 
 // Destructure safeQuery and pool from db.js
 const { pool, safeQuery } = db;
 

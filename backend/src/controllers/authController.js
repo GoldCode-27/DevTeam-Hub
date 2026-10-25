@@ -32,6 +32,7 @@ const sendAuthResponse = (res, data, statusCode) => {
   res.status(statusCode).json({ ...publicPayload, refresh_expires_at });
 };
 
+//register handller
 export const registerHandler = async (req, res, next) => {
   try {
     const data = await register(req.body);
@@ -40,10 +41,10 @@ export const registerHandler = async (req, res, next) => {
     next(error);
   }
 };
-
+//continue with google handller 
 export const googleAuthHandler = async (req, res, next) => {
   try {
-    // Postman ወይም Frontend የሚልከውን idToken ወይም body በቀጥታ ወደ googleLogin እንልካለን
+    //  idToken from Frontend sent to  googleLogin 
     const data = await googleLogin(req.body, req);
     
     sendAuthResponse(res, data, 200);
@@ -51,6 +52,8 @@ export const googleAuthHandler = async (req, res, next) => {
     next(error);
   }
 };
+//login  handler is responsible for handling user login requests. It extracts the login credentials from the request body, calls the login service, and sends the authentication response back to the client.
+//  If an error occurs during the process, it passes the error to the next middleware for handling.
 export const loginHandler = async (req, res, next) => {
   try {
     const data = await login(
@@ -65,7 +68,10 @@ export const loginHandler = async (req, res, next) => {
     next(error);
   }
 };
-
+ 
+// refresh handler is responsible for handling token refresh requests.
+//  It reads the refresh token from the request, calls the refresh service, 
+// and sends the new authentication response back to the client.
 export const refreshHandler = async (req, res, next) => {
   try {
     const data = await refresh({ refresh_token: readRefreshToken(req) }, req);
@@ -76,6 +82,9 @@ export const refreshHandler = async (req, res, next) => {
   }
 };
 
+//logout handler is responsible for handling user logout requests. It extracts the 
+// session ID and a flag indicating whether to log out from all devices from the request body,
+//  calls the logout service, and clears the refresh token cookie if necessary.
 export const logoutHandler = async (req, res, next) => {
   try {
     const { session_id, all_other_devices } = req.body || {};
