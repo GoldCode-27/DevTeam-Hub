@@ -3,6 +3,7 @@ import authRoutes from './authRouts.js'; // Import the auth routes
 import dashboardRoutes from './dashboardRoutes.js';
 import activityRoutes from './activityRoutes.js';
 import installRoutes from './install.routes.js'; // Import the install routes
+import userRoutes from './userRoutes.js'; // Import the user and admin routes
 // Create a main router instance to aggregate all modular API routes
 const router = express.Router();
 
@@ -20,6 +21,12 @@ router.use('/install', installRoutes); // Mount install routes
 
 // Mount auth routes under the '/auth' prefix (results in /api/auth)
 router.use('/auth', authRoutes); // Mount auth routes
+
+/**
+ * Developer 3 API Module Routes
+ */
+// Mount user and admin routes under the '/users' prefix (results in /api/users)
+router.use('/users', userRoutes); // Mount user routes
 
 // Export the master router to be mounted into the main server application
 
