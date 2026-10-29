@@ -4,7 +4,7 @@
  */
 
 // Import user service using ES module syntax
-import { getUsers, getUserById  } from '../services/userService.js';
+import { getUsers, getUserById, updateUserProfile  } from '../services/userService.js';
 
 
 
@@ -65,6 +65,25 @@ export const getUserProfile = async (req, res, next) => {
     });
 
     return res.status(200).json(userProfile);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Handles PATCH /api/users/me
+ * Updates current authenticated user's profile details (Task T14).
+ */
+export const updateMyProfile = async (req, res, next) => {
+  try {
+    const userId = req.user.id || req.user.uid;
+
+    const updatedProfile = await updateUserProfile({
+      userId,
+      updateData: req.body
+    });
+
+    return res.status(200).json(updatedProfile);
   } catch (error) {
     next(error);
   }

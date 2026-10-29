@@ -315,6 +315,129 @@ export const getUserById = async ({
   return responseData;
 };
 
+
+/**
+ * Task T14: Update your profile
+ * 
+ * Updates the authenticated user's profile details.
+ * 
+ * Strict Business Rules:
+ * - Email is strictly IMMUTABLE (cannot be modified via profile update).
+ * - Bio length must not exceed 500 characters (returns 422 if exceeded).
+ * - Partial update: updates only fields explicitly supplied in the payload.
+ * - Skills array replaces the existing set completely.
+ * 
+ * @param {Object} options
+ * @param {number|string} options.userId - Internal user ID of the caller (from req.user)
+ * @param {Object} options.updateData - Fields submitted for modification
+ * @returns {Promise<Object>} Updated user profile object matching API documentation schema
+ */
+export const updateUserProfile = async ({ userId, updateData }) => {
+  const {
+    first_name,
+    last_name,
+    job_title,
+    bio,
+    current_focus,
+    social_links,
+    avatar_url,
+    skills
+  } = updateData;
+
+  // Validation Rule: bio max 500 characters
+  if (bio && bio.length > 500) {
+    throw new AppError('Bio cannot exceed 500 characters', 422, 'VALIDATION_ERROR', [
+      { field: 'bio', message: 'Bio must be at most 500 characters long' }
+    ]);
+  }
+
+  const updates = [];
+  const params = [];
+
+  // Dynamically accumulate fields to update (Notice: email is strictly omitted)
+  if (first_name !== undefined) {
+    updates.push('first_name = ?');
+    params.push(first_name ? first_name.trim() : null);
+  }
+  if (last_name !== undefined) {
+    updates.push('last_name = ?');
+    params.push(last_name ? last_name.trim() : null);
+  }
+  if (job_title !== undefined) {
+    updates.push('job_title = ?');
+    params.push(job_title ? job_title.trim() : null);
+  }
+  if (bio !== undefined) {
+    updates.push('bio = ?');
+    params.push(bio ? bio.trim() : null);
+  }
+  if (current_focus !== undefined) {
+    updates.push('current_focus = ?');
+    params.push(current_focus ? current_focus.trim() : null);
+  }
+  if (avatar_url !== undefined) {
+    updates.push('avatar_url = ?');
+    params.push(avatar_url ? avatar_url.trim() : null);
+  }
+  if (social_links !== undefined) {
+    updates.push('social_links = ?');
+    // Ensure social_links is safely saved as a JSON string
+    params.push(typeof social_links === 'object' ? JSON.stringify(social_links) : social_links);
+  }
+
+  // Use a transaction connection to handle users and user_skills atomically
+  const connection = await pool.getConnection();
+  let committed = false;
+
+  try {
+    await connection.beginTransaction();
+
+    // 1. Update users table if any user field has changed
+    if (updates.length > 0) {
+      const sql = `UPDATE users SET ${updates.join(', ')} WHERE id = ?`;
+      params.push(userId);
+      await connection.query(sql, params);
+    }
+
+    // 2. Full replacement strategy for skills array if provided
+    if (Array.isArray(skills)) {
+      // Remove previous skills for this user
+      await connection.query(`DELETE FROM user_skills WHERE user_id = ?`, [userId]);
+
+      // Filter and insert distinct valid skills
+      const sanitizedSkills = skills
+        .map((s) => String(s).trim())
+        .filter(Boolean);
+
+      if (sanitizedSkills.length > 0) {
+        const skillValues = sanitizedSkills.map((skill) => [userId, skill]);
+        await connection.query(
+          `INSERT INTO user_skills (user_id, skill) VALUES ?`,
+          [skillValues]
+        );
+      }
+    }
+
+    await connection.commit();
+    committed = true;
+  } catch (error) {
+    if (!committed) {
+      await connection.rollback();
+    }
+    throw error;
+  } finally {
+    connection.release();
+  }
+
+  // 3. Return the freshly updated profile using our existing getUserById service
+  return getUserById({
+    targetId: 'me',
+    currentUser: { id: userId },
+    clientIp: null,
+    clientUserAgent: null
+  });
+};
+
 export default {
   getUsers
 };

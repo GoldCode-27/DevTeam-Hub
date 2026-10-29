@@ -4,7 +4,7 @@
  */
 
 import express from 'express';
-import { listUsers, getUserProfile  } from '../controllers/userController.js';
+import { listUsers, getUserProfile, updateMyProfile  } from '../controllers/userController.js';
 
 // Dev 2's authentication middleware 
 import { authenticate } from '../middlewares/authMiddleware.js';
@@ -25,5 +25,12 @@ router.get('/', authenticate, listUsers);
  * @access  Protected (Supports ?include=permissions,sessions)
  */
 router.get('/:id', authenticate, getUserProfile);
+
+/**
+ * @route   PATCH /api/users/me
+ * @desc    Update your profile (Task T14)
+ * @access  Protected (Requires Bearer token)
+ */
+router.patch('/me', authenticate, updateMyProfile);
 
 export default router;
