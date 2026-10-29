@@ -4,7 +4,9 @@
  */
 
 // Import user service using ES module syntax
-import { getUsers } from '../services/userService.js';
+import { getUsers, getUserById  } from '../services/userService.js';
+
+
 
 /**
  * Handles GET /api/users request to list team members.
@@ -37,6 +39,33 @@ export const listUsers = async (req, res, next) => {
     return res.status(200).json(result);
   } catch (error) {
     // Forward unexpected exceptions to global error handler
+    next(error);
+  }
+};
+
+/**
+ * Handles GET /api/users/:id
+ * Fetches user profile details for a given public_id or 'me' (Task T13).
+ */
+export const getUserProfile = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { include } = req.query;
+
+    // Extract client metadata to evaluate is_current session state
+    const clientIp = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress;
+    const clientUserAgent = req.headers['user-agent'];
+
+    const userProfile = await getUserById({
+      targetId: id,
+      include,
+      currentUser: req.user,
+      clientIp,
+      clientUserAgent
+    });
+
+    return res.status(200).json(userProfile);
+  } catch (error) {
     next(error);
   }
 };

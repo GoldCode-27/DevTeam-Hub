@@ -1,11 +1,15 @@
 /**
  * @file userService.js
  * @description Core business logic for user management and retrieval.
- * Part of Task T12 (List team members) for Developer 3.
+ * Part of Task T12 (List team members) 
  */
 
 // Import database pool from the configured database connection module
 import db from '../config/db.js';
+
+
+import AppError from '../utils/appError.js';
+
 
 // Destructure the connection pool from the default export
 const { pool } = db;
@@ -136,6 +140,179 @@ export const getUsers = async ({
     page: currentPage,
     users
   };
+};
+
+
+/**
+ * Task T13: Get a user (or yourself)
+ * 
+ * Fetches user profile by 'me' or public_id.
+ * Includes user skills, and optionally permissions and sessions.
+ * 
+ * Security Rules:
+ * - Email is returned ONLY to the owner or users with 'user:manage' permission.
+ * - 'permissions' and 'sessions' are returned ONLY to the owner or 'user:manage' holders.
+ * 
+ * @param {Object} options
+ * @param {string} options.targetId - The requested identifier ('me' or user public_id UUID)
+ * @param {string} [options.include] - Comma-separated relationships ('permissions,sessions')
+ * @param {Object} options.currentUser - The authenticated user object from req.user
+ * @param {string} [options.clientIp] - Client IP address for determining active session
+ * @param {string} [options.clientUserAgent] - Client User Agent for determining active session
+ * @returns {Promise<Object>} Formatted user profile
+ */
+export const getUserById = async ({
+  targetId,
+  include = '',
+  currentUser,
+  clientIp,
+  clientUserAgent
+}) => {
+  // Determine if the caller is requesting their own profile
+  const isSelf = targetId === 'me' || targetId === currentUser.public_id;
+
+  // Determine if caller has administrative privileges
+  const isAdmin = Array.isArray(currentUser.permissions) && currentUser.permissions.includes('user:manage');
+
+  // Authorization check: Only the account owner or admins can see sensitive fields
+  const canAccessSensitiveData = isSelf || isAdmin;
+
+  // 1. Fetch user base record
+  let userSql = `
+    SELECT 
+      id,
+      public_id,
+      username,
+      first_name,
+      last_name,
+      email,
+      status,
+      job_title,
+      bio,
+      current_focus,
+      avatar_url,
+      social_links,
+      last_active_at
+    FROM users
+  `;
+
+  const userParams = [];
+
+  if (targetId === 'me') {
+    // Lookup by internal database ID from authenticated user token
+    userSql += ` WHERE id = ? LIMIT 1`;
+    userParams.push(currentUser.id || currentUser.uid);
+  } else {
+    // Lookup by public UUID
+    userSql += ` WHERE public_id = ? LIMIT 1`;
+    userParams.push(targetId);
+  }
+
+  const [userRows] = await pool.query(userSql, userParams);
+
+  if (userRows.length === 0) {
+    throw new AppError('User not found', 404, 'NOT_FOUND');
+  }
+
+  const user = userRows[0];
+
+  // 2. Fetch user skills from user_skills table
+  const [skillRows] = await pool.query(
+    `SELECT skill FROM user_skills WHERE user_id = ? ORDER BY skill ASC`,
+    [user.id]
+  );
+  const skills = skillRows.map((r) => r.skill);
+
+  // 3. Parse social_links safely (stored as JSON or string)
+  let parsedSocialLinks = { github: '', linkedin: '', x: '' };
+  if (user.social_links) {
+    try {
+      parsedSocialLinks = typeof user.social_links === 'string'
+        ? JSON.parse(user.social_links)
+        : user.social_links;
+    } catch {
+      parsedSocialLinks = { github: '', linkedin: '', x: '' };
+    }
+  }
+
+  // 4. Construct initial response payload adhering to API schema
+  const responseData = {
+    public_id: user.public_id,
+    username: user.username,
+    first_name: user.first_name,
+    last_name: user.last_name,
+    avatar_url: user.avatar_url,
+    // Email Privacy Rule: Hidden (null) if requester is neither owner nor admin
+    email: canAccessSensitiveData ? user.email : null,
+    status: user.status,
+    job_title: user.job_title,
+    bio: user.bio,
+    current_focus: user.current_focus,
+    skills,
+    social_links: parsedSocialLinks,
+    presence: computePresence(user.last_active_at)
+  };
+
+  // 5. Handle optional inclusions ('permissions', 'sessions')
+  const includes = include
+    .split(',')
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+
+  // Inclusion of permissions
+  if (includes.includes('permissions') && canAccessSensitiveData) {
+    const [permRows] = await pool.query(
+      `SELECT 
+        p.module,
+        p.slug,
+        p.description
+       FROM permissions p
+       INNER JOIN user_permissions up ON up.permission_id = p.id
+       WHERE up.user_id = ?
+       ORDER BY p.module, p.slug`,
+      [user.id]
+    );
+
+    responseData.permissions = permRows.map((p) => ({
+      module: p.module,
+      slug: p.slug,
+      description: p.description,
+      granted: true
+    }));
+  }
+
+  // Inclusion of active sessions
+  if (includes.includes('sessions') && canAccessSensitiveData) {
+    const [sessionRows] = await pool.query(
+      `SELECT 
+        id,
+        ip_address,
+        user_agent,
+        last_used_at,
+        created_at
+       FROM sessions
+       WHERE user_id = ? AND is_revoked = FALSE
+       ORDER BY last_used_at DESC, created_at DESC`,
+      [user.id]
+    );
+
+    // Determine current active session based on IP/UserAgent match or most recent activity
+    responseData.sessions = sessionRows.map((session, index) => {
+      const isIpMatch = clientIp && session.ip_address === clientIp;
+      const isUaMatch = clientUserAgent && session.user_agent === clientUserAgent;
+      const isCurrent = isSelf && (index === 0 || (isIpMatch && isUaMatch));
+
+      return {
+        id: session.id,
+        ip_address: session.ip_address,
+        user_agent: session.user_agent,
+        last_used_at: session.last_used_at ? new Date(session.last_used_at).toISOString() : null,
+        is_current: Boolean(isCurrent)
+      };
+    });
+  }
+
+  return responseData;
 };
 
 export default {

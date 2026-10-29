@@ -4,10 +4,11 @@
  */
 
 import express from 'express';
-import { listUsers } from '../controllers/userController.js';
+import { listUsers, getUserProfile  } from '../controllers/userController.js';
 
 // Dev 2's authentication middleware 
 import { authenticate } from '../middlewares/authMiddleware.js';
+
 
 const router = express.Router();
 
@@ -17,5 +18,12 @@ const router = express.Router();
  * @access  Protected (Requires Bearer token)
  */
 router.get('/', authenticate, listUsers);
+
+/**
+ * @route   GET /api/users/:id
+ * @desc    Get user details or self profile (Task T13)
+ * @access  Protected (Supports ?include=permissions,sessions)
+ */
+router.get('/:id', authenticate, getUserProfile);
 
 export default router;
