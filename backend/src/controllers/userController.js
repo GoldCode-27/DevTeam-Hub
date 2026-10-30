@@ -4,7 +4,7 @@
  */
 
 // Import user service using ES module syntax
-import { getUsers, getUserById, updateUserProfile, createTeamMember   } from '../services/userService.js';
+import { getUsers, getUserById, updateUserProfile, createTeamMember, updateMemberStatusAndPermissions   } from '../services/userService.js';
 
 
 
@@ -110,6 +110,31 @@ export const onboardUser = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * Handles PATCH /api/admin/users/:id
+ * Updates target user status and replaces permission set (Task T16).
+ */
+export const updateMemberByAdmin = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { status, permissions } = req.body;
+    const adminUserId = req.user.id || req.user.uid;
+
+    const result = await updateMemberStatusAndPermissions({
+      targetPublicId: id,
+      status,
+      permissions,
+      adminUserId
+    });
+
+    return res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+
 export default {
   listUsers
 };

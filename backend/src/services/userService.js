@@ -567,6 +567,107 @@ export const createTeamMember = async ({ full_name, email, permissions = [], adm
   }
 };
 
+/**
+ * Task T16: Update a member (status and permissions)
+ * 
+ * Allows administrators to update account status and assign/replace permissions.
+ * 
+ * Strict Business Rules:
+ * - Restricted exclusively to administrators holding 'user:manage'.
+ * - Setting status to 'SUSPENDED' MUST instantly revoke all active sessions for this user.
+ * - Supplying permissions array replaces the existing permission set completely.
+ * - Changes are executed within a database transaction.
+ * 
+ * @param {Object} options
+ * @param {string} options.targetPublicId - Public UUID of the target user (:id param)
+ * @param {string} [options.status] - New status ('ACTIVE', 'SUSPENDED', etc.)
+ * @param {Array<string>} [options.permissions] - New array of permission slugs
+ * @param {number|string} options.adminUserId - Internal ID of the admin performing the update
+ * @returns {Promise<{success: boolean}>}
+ */
+export const updateMemberStatusAndPermissions = async ({
+  targetPublicId,
+  status,
+  permissions,
+  adminUserId
+}) => {
+  // Validate that target user exists
+  const [userRows] = await pool.query(
+    `SELECT id, status FROM users WHERE public_id = ? LIMIT 1`,
+    [targetPublicId]
+  );
+
+  if (userRows.length === 0) {
+    throw new AppError('User not found', 404, 'NOT_FOUND');
+  }
+
+  const targetUser = userRows[0];
+  let connection = null;
+  let committed = false;
+
+  try {
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    // 1. Update status if provided
+    if (status) {
+      await connection.query(
+        `UPDATE users SET status = ? WHERE id = ?`,
+        [status, targetUser.id]
+      );
+
+      // Rule: SUSPENDED status strictly revokes all active sessions immediately
+      if (status.toUpperCase() === 'SUSPENDED') {
+        await connection.query(
+          `UPDATE sessions SET is_revoked = TRUE WHERE user_id = ? AND is_revoked = FALSE`,
+          [targetUser.id]
+        );
+      }
+    }
+
+    // 2. Full replacement strategy for permissions if provided
+    if (Array.isArray(permissions)) {
+      // Delete old permissions
+      await connection.query(
+        `DELETE FROM user_permissions WHERE user_id = ?`,
+        [targetUser.id]
+      );
+
+      // Insert new permission slugs
+      if (permissions.length > 0) {
+        const [permRows] = await connection.query(
+          `SELECT id, slug FROM permissions WHERE slug IN (?)`,
+          [permissions]
+        );
+
+        if (permRows.length > 0) {
+          const userPermValues = permRows.map((p) => [targetUser.id, p.id, adminUserId]);
+          await connection.query(
+            `INSERT INTO user_permissions (user_id, permission_id, granted_by) VALUES ?`,
+            [userPermValues]
+          );
+        }
+      }
+    }
+
+    await connection.commit();
+    committed = true;
+
+    // Return standard success response matching API documentation
+    return { success: true };
+  } catch (error) {
+    if (connection && !committed) {
+      await connection.rollback();
+    }
+    throw error;
+  } finally {
+    if (connection) {
+      connection.release();
+    }
+  }
+};
+
+
 export default {
   getUsers
 };
