@@ -4,7 +4,7 @@
  */
 
 // Import user service using ES module syntax
-import { getUsers, getUserById, updateUserProfile, createTeamMember, updateMemberStatusAndPermissions   } from '../services/userService.js';
+import { getUsers, getUserById, updateUserProfile, createTeamMember, updateMemberStatusAndPermissions, getVisibilityMatrix   } from '../services/userService.js';
 
 
 
@@ -133,6 +133,27 @@ export const updateMemberByAdmin = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * Handles GET /api/admin/visibility
+ * Returns visibility matrix for tasks or resources with pagination (Task T17).
+ */
+export const getVisibility = async (req, res, next) => {
+  try {
+    const { type, page, per_page } = req.query;
+
+    const result = await getVisibilityMatrix({
+      type,
+      page,
+      per_page
+    });
+
+    return res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 
 
 export default {

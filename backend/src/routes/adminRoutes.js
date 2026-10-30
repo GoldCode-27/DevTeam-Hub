@@ -1,5 +1,5 @@
 import express from 'express';
-import { onboardUser, updateMemberByAdmin  } from '../controllers/userController.js';
+import { onboardUser, updateMemberByAdmin,getVisibility  } from '../controllers/userController.js';
 import { authenticate, requirePermission } from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
@@ -22,5 +22,11 @@ router.post('/users', onboardUser);
  */
 router.patch('/users/:id', updateMemberByAdmin);
 
+/**
+ * @route   GET /api/admin/visibility
+ * @desc    Get visibility matrix with pagination (Task T17)
+ * @access  Admin Only (user:manage)
+ */
+router.get('/visibility', getVisibility);
 
 export default router;

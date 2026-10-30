@@ -667,6 +667,96 @@ export const updateMemberStatusAndPermissions = async ({
   }
 };
 
+/**
+ * Task T17: Get visibility matrix
+ * 
+ * Retrieves paginated visibility state for tasks or resources.
+ * 
+ * Strict Business Rules:
+ * - Query param 'type' accepts 'task' or 'resource' (defaults to 'task').
+ * - Returns total count, current page, and formatted items array.
+ * 
+ * @param {Object} options
+ * @param {string} [options.type='task'] - Entity type: 'task' or 'resource'
+ * @param {number|string} [options.page=1] - Requested page number
+ * @param {number|string} [options.per_page=20] - Number of items per page (max 100)
+ * @returns {Promise<{page: number, total: number, items: Array<Object>}>}
+ */
+export const getVisibilityMatrix = async ({ type = 'task', page = 1, per_page = 20 }) => {
+  const currentPage = Math.max(1, parseInt(page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(per_page, 10) || 20));
+  const offset = (currentPage - 1) * limit;
+
+  const isTask = String(type).toLowerCase() !== 'resource';
+
+  let totalCount = 0;
+  let items = [];
+
+  if (isTask) {
+    // 1. Count total tasks
+    const [countRows] = await pool.query(`SELECT COUNT(*) AS total FROM tasks`);
+    totalCount = countRows[0]?.total || 0;
+
+    // 2. Query tasks visibility records
+    const [taskRows] = await pool.query(
+      `SELECT 
+        task_code AS id,
+        'task' AS type,
+        title,
+        description,
+        is_public,
+        updated_at
+       FROM tasks
+       ORDER BY updated_at DESC, id DESC
+       LIMIT ? OFFSET ?`,
+      [Number(limit), Number(offset)]
+    );
+
+    items = taskRows.map((t) => ({
+      id: t.id,
+      type: 'task',
+      title: t.title,
+      description: t.description,
+      is_public: Boolean(t.is_public),
+      updated_at: t.updated_at ? new Date(t.updated_at).toISOString() : new Date().toISOString()
+    }));
+  } else {
+    // 1. Count total resources
+    const [countRows] = await pool.query(`SELECT COUNT(*) AS total FROM resources`);
+    totalCount = countRows[0]?.total || 0;
+
+    // 2. Query resources visibility records
+    const [resourceRows] = await pool.query(
+      `SELECT 
+        public_id AS id,
+        'resource' AS type,
+        title,
+        description,
+        is_public,
+        updated_at
+       FROM resources
+       ORDER BY updated_at DESC, id DESC
+       LIMIT ? OFFSET ?`,
+      [Number(limit), Number(offset)]
+    );
+
+    items = resourceRows.map((r) => ({
+      id: r.id,
+      type: 'resource',
+      title: r.title,
+      description: r.description,
+      is_public: Boolean(r.is_public),
+      updated_at: r.updated_at ? new Date(r.updated_at).toISOString() : new Date().toISOString()
+    }));
+  }
+
+  return {
+    page: currentPage,
+    total: Number(totalCount),
+    items
+  };
+};
+
 
 export default {
   getUsers
