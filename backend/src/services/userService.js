@@ -4,6 +4,13 @@
  * Part of Task T12 (List team members) 
  */
 
+
+import crypto from 'crypto';
+import bcrypt from 'bcrypt';
+import { v4 as uuidv4 } from 'uuid';
+import { sendWelcomeEmail } from '../utils/emailService.js';
+
+
 // Import database pool from the configured database connection module
 import db from '../config/db.js';
 
@@ -436,6 +443,128 @@ export const updateUserProfile = async ({ userId, updateData }) => {
     clientIp: null,
     clientUserAgent: null
   });
+};
+
+/**
+ * Task T15: Create a team member (Admin User Onboarding)
+ * 
+ * Generates an account for a new user with generated temporary credentials.
+ * Dispatches an automated onboarding email containing the temporary password.
+ * 
+ * @param {Object} options
+ * @param {string} options.full_name - Full display name of the new member
+ * @param {string} options.email - Unique email address
+ * @param {Array<string>} [options.permissions=[]] - Array of permission slugs to grant
+ * @param {number|string} options.adminUserId - Internal ID of the admin granting permissions
+ * @returns {Promise<Object>} Formatted credentials payload matching API documentation
+ */
+export const createTeamMember = async ({ full_name, email, permissions = [], adminUserId }) => {
+  if (!full_name || !email) {
+    throw new AppError('full_name and email are required', 400, 'VALIDATION_ERROR', [
+      ...(!full_name ? [{ field: 'full_name', message: 'Full name is required' }] : []),
+      ...(!email ? [{ field: 'email', message: 'Email is required' }] : [])
+    ]);
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
+  const cleanFullName = full_name.trim();
+
+  // Split full_name into first_name and last_name
+  const nameParts = cleanFullName.split(/\s+/);
+  const firstName = nameParts[0];
+  const lastName = nameParts.slice(1).join(' ') || firstName;
+
+  // Generate username based on first.last or email prefix
+  const usernameBase = (nameParts.length > 1
+    ? `${nameParts[0]}.${nameParts[nameParts.length - 1]}`
+    : cleanEmail.split('@')[0]
+  ).toLowerCase().replace(/[^a-z0-9._-]/g, '');
+
+  let connection = null;
+  let committed = false;
+
+  try {
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    // 1. Check for duplicate email or username (409 Conflict)
+    const [existing] = await connection.query(
+      `SELECT id FROM users WHERE email = ? OR username = ? LIMIT 1`,
+      [cleanEmail, usernameBase]
+    );
+
+    if (existing.length > 0) {
+      throw new AppError('A user with this email or username already exists', 409, 'DUPLICATE_ENTRY');
+    }
+
+    // 2. Generate secure temporary password
+    const rawTempPassword = crypto.randomBytes(6).toString('base64').replace(/[^a-zA-Z0-9]/g, 'a') + '!9A';
+    const passwordHash = await bcrypt.hash(rawTempPassword, 10);
+    const publicId = uuidv4();
+
+    // 3. Insert into users table with PENDING_ONBOARDING status
+    const [insertResult] = await connection.query(
+      `INSERT INTO users (
+        public_id, username, email, password_hash, first_name, last_name, status, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, 'PENDING_ONBOARDING', NOW())`,
+      [publicId, usernameBase, cleanEmail, passwordHash, firstName, lastName]
+    );
+
+    const newUserId = insertResult.insertId;
+
+    // 4. Map and assign permissions into user_permissions table
+    if (Array.isArray(permissions) && permissions.length > 0) {
+      const [permRows] = await connection.query(
+        `SELECT id, slug FROM permissions WHERE slug IN (?)`,
+        [permissions]
+      );
+
+      if (permRows.length > 0) {
+        const userPermValues = permRows.map((p) => [newUserId, p.id, adminUserId]);
+        await connection.query(
+          `INSERT INTO user_permissions (user_id, permission_id, granted_by) VALUES ?`,
+          [userPermValues]
+        );
+      }
+    }
+
+    // Retrieve timestamp
+    const [createdRows] = await connection.query(
+      `SELECT created_at FROM users WHERE id = ?`,
+      [newUserId]
+    );
+
+    await connection.commit();
+    committed = true;
+
+    // 5. Send onboarding email with temporary password
+    try {
+      await sendWelcomeEmail(cleanEmail, rawTempPassword);
+      console.log(`[Email Service]: Welcome email successfully delivered to ${cleanEmail}`);
+    } catch (emailErr) {
+      console.error('[Email Service Warning]: SMTP failed to deliver email:', emailErr.message);
+    }
+
+    // 6. Return response payload (Temporary password shown once, hash never returned)
+    return {
+      public_id: publicId,
+      username: usernameBase,
+      temporary_password: rawTempPassword,
+      status: 'PENDING_ONBOARDING',
+      created_at: createdRows[0]?.created_at
+        ? new Date(createdRows[0].created_at).toISOString()
+        : new Date().toISOString()
+    };
+  } catch (error) {
+    if (connection && !committed) {
+      await connection.rollback();
+    }
+    throw error;
+  } finally {
+    if (connection) {
+      connection.release();
+    }
+  }
 };
 
 export default {

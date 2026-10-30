@@ -4,7 +4,7 @@
  */
 
 // Import user service using ES module syntax
-import { getUsers, getUserById, updateUserProfile  } from '../services/userService.js';
+import { getUsers, getUserById, updateUserProfile, createTeamMember   } from '../services/userService.js';
 
 
 
@@ -89,6 +89,27 @@ export const updateMyProfile = async (req, res, next) => {
   }
 };
 
+/**
+ * Handles POST /api/admin/users
+ * Onboards a new team member and generates temporary credentials (Task T15).
+ */
+export const onboardUser = async (req, res, next) => {
+  try {
+    const { full_name, email, permissions } = req.body;
+    const adminUserId = req.user.id || req.user.uid;
+
+    const result = await createTeamMember({
+      full_name,
+      email,
+      permissions,
+      adminUserId
+    });
+
+    return res.status(201).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
 export default {
   listUsers
 };

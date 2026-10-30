@@ -4,6 +4,7 @@ import dashboardRoutes from './dashboardRoutes.js';
 import activityRoutes from './activityRoutes.js';
 import installRoutes from './install.routes.js'; // Import the install routes
 import userRoutes from './userRoutes.js'; // Import the user and admin routes
+import adminRoutes from './adminRoutes.js';
 // Create a main router instance to aggregate all modular API routes
 const router = express.Router();
 
@@ -27,6 +28,16 @@ router.use('/auth', authRoutes); // Mount auth routes
  */
 // Mount user and admin routes under the '/users' prefix (results in /api/users)
 router.use('/users', userRoutes); // Mount user routes
+
+
+/**
+ * Developer 3: Admin Control Center API Module Routes
+ * 
+ * Mounts administrative control endpoints under the '/admin' sub-path (results in /api/admin/...).
+ * Covers user onboarding, member suspension, permission toggles, and visibility matrix.
+ * Strictly guarded by authentication and 'user:manage' permission middleware.
+ */
+router.use('/admin', adminRoutes); // Mount admin routes
 
 // Export the master router to be mounted into the main server application
 
