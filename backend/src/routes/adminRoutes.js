@@ -1,5 +1,5 @@
 import express from 'express';
-import { onboardUser, updateMemberByAdmin,getVisibility  } from '../controllers/userController.js';
+import { onboardUser, updateMemberByAdmin,getVisibility, updateVisibilityBulk  } from '../controllers/userController.js';
 import { authenticate, requirePermission } from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
@@ -28,5 +28,12 @@ router.patch('/users/:id', updateMemberByAdmin);
  * @access  Admin Only (user:manage)
  */
 router.get('/visibility', getVisibility);
+
+/**
+ * @route   PATCH /api/admin/visibility
+ * @desc    Bulk update visibility for tasks or resources (Task T18)
+ * @access  Admin Only (user:manage)
+ */
+router.patch('/visibility', updateVisibilityBulk);
 
 export default router;

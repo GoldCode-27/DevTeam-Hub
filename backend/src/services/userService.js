@@ -757,6 +757,54 @@ export const getVisibilityMatrix = async ({ type = 'task', page = 1, per_page = 
   };
 };
 
+/**
+ * Task T18: Bulk update visibility
+ * 
+ * Sets the is_public visibility flag across all tasks or all resources.
+ * 
+ * Strict Business Rule:
+ * - Updates every row; returns updated count ({ updated: 24 }).
+ * 
+ * @param {Object} options
+ * @param {string} options.target - 'tasks' or 'resources'
+ * @param {boolean} options.is_public - Target public visibility flag
+ * @returns {Promise<{updated: number}>}
+ */
+export const bulkUpdateVisibility = async ({ target, is_public }) => {
+  if (!target) {
+    throw new AppError("Target ('tasks' or 'resources') is required", 400, 'VALIDATION_ERROR');
+  }
+
+  const normalizedTarget = String(target).trim().toLowerCase();
+  const visibilityFlag = Boolean(is_public);
+
+  let updatedCount = 0;
+
+  if (normalizedTarget === 'tasks' || normalizedTarget === 'task') {
+    const [result] = await pool.query(
+      `UPDATE tasks SET is_public = ?, updated_at = NOW()`,
+      [visibilityFlag]
+    );
+    // In MySQL, affectedRows returns modified count, or fallback to total task count if same value
+    const [countRows] = await pool.query(`SELECT COUNT(*) AS total FROM tasks`);
+    updatedCount = countRows[0]?.total || result.affectedRows || 0;
+  } else if (normalizedTarget === 'resources' || normalizedTarget === 'resource') {
+    const [result] = await pool.query(
+      `UPDATE resources SET is_public = ?, updated_at = NOW()`,
+      [visibilityFlag]
+    );
+    const [countRows] = await pool.query(`SELECT COUNT(*) AS total FROM resources`);
+    updatedCount = countRows[0]?.total || result.affectedRows || 0;
+  } else {
+    throw new AppError("Target must be either 'tasks' or 'resources'", 400, 'VALIDATION_ERROR');
+  }
+
+  return {
+    updated: Number(updatedCount)
+  };
+};
+
+
 
 export default {
   getUsers

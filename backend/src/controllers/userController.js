@@ -4,7 +4,7 @@
  */
 
 // Import user service using ES module syntax
-import { getUsers, getUserById, updateUserProfile, createTeamMember, updateMemberStatusAndPermissions, getVisibilityMatrix   } from '../services/userService.js';
+import { getUsers, getUserById, updateUserProfile, createTeamMember, updateMemberStatusAndPermissions, getVisibilityMatrix,bulkUpdateVisibility   } from '../services/userService.js';
 
 
 
@@ -133,6 +133,26 @@ export const updateMemberByAdmin = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * Handles PATCH /api/admin/visibility
+ * Bulk toggles public visibility for all tasks or resources (Task T18).
+ */
+export const updateVisibilityBulk = async (req, res, next) => {
+  try {
+    const { target, is_public } = req.body;
+
+    const result = await bulkUpdateVisibility({
+      target,
+      is_public
+    });
+
+    return res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 
 /**
  * Handles GET /api/admin/visibility
