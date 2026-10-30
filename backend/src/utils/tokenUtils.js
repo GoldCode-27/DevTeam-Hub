@@ -1,44 +1,55 @@
+
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 
+
 /**
- * Token Utilities (Developer 2 — Auth)
- * Short-lived access JWTs + opaque rotating refresh tokens (SHA-256 in sessions).
+  Token Utilities (JWT-based Access & Refresh Tokens)
  */
 
 export const REFRESH_COOKIE_NAME = 'refresh_token';
 export const ACCESS_TOKEN_EXPIRES = process.env.JWT_ACCESS_EXPIRES || '15m';
+export const REFRESH_TOKEN_EXPIRES = process.env.REFRESH_TOKEN_EXPIRES || '30d';
 
-export const hashRefreshToken = (token) =>
-  crypto.createHash('sha256').update(token).digest('hex');
-
-export const generateRefreshToken = () => crypto.randomBytes(48).toString('base64url');
-
+// Create Access Token 
 export const signAccessToken = (payload) => {
   const secret = process.env.JWT_ACCESS_SECRET;
-  if (!secret) {
-    throw new Error('JWT_ACCESS_SECRET is not configured');
-  }
-
-  return jwt.sign(payload, secret, {
-    expiresIn: ACCESS_TOKEN_EXPIRES
-  });
+  if (!secret) throw new Error('JWT_ACCESS_SECRET is not configured');
+  return jwt.sign(payload, secret, { expiresIn: ACCESS_TOKEN_EXPIRES });
 };
 
+// Access Token Verification
 export const verifyAccessToken = (token) => {
   const secret = process.env.JWT_ACCESS_SECRET;
-  if (!secret) {
-    throw new Error('JWT_ACCESS_SECRET is not configured');
-  }
-
+  if (!secret) throw new Error('JWT_ACCESS_SECRET is not configured');
   return jwt.verify(token, secret);
 };
 
+// Create Refresh Token as jwt
+export const signRefreshToken = (payload) => {
+  const secret = process.env.JWT_REFRESH_SECRET;
+  if (!secret) throw new Error('JWT_REFRESH_SECRET is not configured');
+  return jwt.sign(payload, secret, { expiresIn: REFRESH_TOKEN_EXPIRES });
+};
+
+// Refresh Token Verification
+export const verifyRefreshToken = (token) => {
+  const secret = process.env.JWT_REFRESH_SECRET;
+  if (!secret) throw new Error('JWT_REFRESH_SECRET is not configured');
+  return jwt.verify(token, secret);
+};
+
+// Refresh Token Expiry Date Calculation
 export const getRefreshExpiryDate = () => {
-  const days = Number(process.env.REFRESH_TOKEN_DAYS) || 30;
+  const days = Number(REFRESH_TOKEN_EXPIRES) || 30;
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + days);
   return expiresAt;
+};
+
+// Refresh Token Hashing (using SHA-256) Crypto
+export const hashRefreshToken = (token) => {
+  return crypto.createHash('sha256').update(token).digest('hex');
 };
 
 export const getClientMeta = (req) => ({
@@ -46,10 +57,6 @@ export const getClientMeta = (req) => ({
   userAgent: String(req.headers['user-agent'] || 'unknown').slice(0, 512)
 });
 
-/**
- * httpOnly refresh cookie flags.
- * Secure is on in production (or when COOKIE_SECURE=true) — required for real HTTPS deploys.
- */
 export const getRefreshCookieOptions = (expiresAt) => {
   const secure =
     process.env.COOKIE_SECURE === 'true' ||

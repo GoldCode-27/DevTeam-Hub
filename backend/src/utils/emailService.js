@@ -12,12 +12,12 @@ const getTransporter = () => {
     host,
     port: Number(process.env.SMTP_PORT) || 587,
     secure: process.env.SMTP_SECURE === 'true',
-    auth: process.env.SMTP_USER
-      ? {
+    auth:
+      {
           user: process.env.SMTP_USER,
           pass: process.env.SMTP_PASS
         }
-      : undefined
+     
   });
 };
 
@@ -26,7 +26,6 @@ export const sendWelcomeEmail = async (email, tempPassword) => {
     throw new Error('Welcome email requires an address and temporary password');
   }
 
-  const from = process.env.SMTP_FROM || process.env.SMTP_USER;
   const transporter = getTransporter();
 
   await transporter.sendMail({
