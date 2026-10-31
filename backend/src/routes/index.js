@@ -5,6 +5,11 @@ import activityRoutes from './activityRoutes.js';
 import installRoutes from './install.routes.js'; // Import the install routes
 import userRoutes from './userRoutes.js'; // Import the user and admin routes
 import adminRoutes from './adminRoutes.js';
+
+import resourceRoutes from "./resource.routes.js";
+import publicRoutes from "./public.routes.js";
+import fileRoutes from "./file.routes.js";
+import testUploadRoutes from "./testUpload.routes.js";
 // Create a main router instance to aggregate all modular API routes
 const router = express.Router();
 
@@ -39,6 +44,14 @@ router.use('/users', userRoutes); // Mount user routes
  */
 router.use('/admin', adminRoutes); // Mount admin routes
 
+// Mount resource routes under the '/resources' prefix (results in /api/resources)
+
+router.use("/resources", resourceRoutes);
+// Mount public and file routes under their respective prefixes
+router.use("/public", publicRoutes);
+// Mount file routes under the '/files' prefix (results in /api/files)
+router.use("/files", fileRoutes);
+router.use("/", testUploadRoutes);
 // Export the master router to be mounted into the main server application
 
 export default router;
