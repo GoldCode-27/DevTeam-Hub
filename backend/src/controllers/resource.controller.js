@@ -2,7 +2,9 @@ import * as resourceService from "../services/resourceService.js";
 import { generateSignedDownloadUrl } from "../utils/storage.js";
 import AppError from "../utils/appError.js";
 
+// ==========================================
 // T20: List resources
+// ==========================================
 export const listResources = async (req, res, next) => {
   try {
     const data = await resourceService.listResources(req.query);
@@ -12,7 +14,9 @@ export const listResources = async (req, res, next) => {
   }
 };
 
+// ==========================================
 // T21: Add a resource
+// ==========================================
 export const createResource = async (req, res, next) => {
   try {
     const data = await resourceService.createResource({
@@ -26,7 +30,9 @@ export const createResource = async (req, res, next) => {
   }
 };
 
+// ==========================================
 // T22: Update a resource
+// ==========================================
 export const updateResource = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -36,6 +42,7 @@ export const updateResource = async (req, res, next) => {
       const hasPerm =
         req.user?.permissions?.includes("resource:toggle_visibility") ||
         req.user?.permissions?.includes("user:manage");
+
       if (!hasPerm) {
         throw new AppError(
           "Forbidden: missing resource:toggle_visibility permission",
@@ -55,7 +62,9 @@ export const updateResource = async (req, res, next) => {
   }
 };
 
+// ==========================================
 // T23: Delete a resource
+// ==========================================
 export const deleteResource = async (req, res, next) => {
   try {
     await resourceService.deleteResource(req.params.id);
@@ -65,7 +74,9 @@ export const deleteResource = async (req, res, next) => {
   }
 };
 
+// ==========================================
 // T24: Download a resource (302 redirect)
+// ==========================================
 export const downloadResource = async (req, res, next) => {
   try {
     const resource = await resourceService.getResourceForDownload(

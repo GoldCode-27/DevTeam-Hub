@@ -8,13 +8,13 @@ import * as ctrl from "../controllers/resource.controller.js";
 
 const router = Router();
 
-// Protect all resource routes with Developer 2's JWT authentication
+// Protect all resource routes with JWT auth
 router.use(authenticate);
 
-// T20: List resources (Any authenticated user)
+// T20: List resources
 router.get("/", ctrl.listResources);
 
-// T21: Add a resource (Requires 'resource:create' permission)
+// T21: Add a resource
 router.post(
   "/",
   requirePermission("resource:create"),
@@ -22,7 +22,7 @@ router.post(
   ctrl.createResource,
 );
 
-// T22: Update a resource (Requires 'resource:update' permission)
+// T22: Update a resource
 router.patch(
   "/:id",
   requirePermission("resource:update"),
@@ -30,14 +30,14 @@ router.patch(
   ctrl.updateResource,
 );
 
-// T23: Delete a resource (Requires 'resource:delete' permission)
+// T23: Delete a resource
 router.delete(
   "/:id",
   requirePermission("resource:delete"),
   ctrl.deleteResource,
 );
 
-// T24: Download a resource (Any authenticated user)
+// T24: Download a resource (Active now!)
 router.get("/:id/download", ctrl.downloadResource);
 
 export default router;

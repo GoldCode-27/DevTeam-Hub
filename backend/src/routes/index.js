@@ -10,6 +10,7 @@ import resourceRoutes from "./resource.routes.js";
 import publicRoutes from "./public.routes.js";
 import fileRoutes from "./file.routes.js";
 import testUploadRoutes from "./testUpload.routes.js";
+
 // Create a main router instance to aggregate all modular API routes
 const router = express.Router();
 
