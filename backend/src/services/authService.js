@@ -280,13 +280,15 @@ export const login = async ({ login, password }, req) => {
     ? normalizedLogin.toLowerCase()
     : normalizedLogin;
 
+    // Find the user by email or username
   const user = await findUserByLogin(lookup);
+
   if (!user) {
     throw new AppError("Invalid credentials", 401, "UNAUTHENTICATED");
   }
 
-  const passwordOk = await bcrypt.compare(password, user.password_hash);
-  if (!passwordOk) {
+  const Password_Match = await bcrypt.compare(password, user.password_hash);
+  if (!Password_Match) {
     throw new AppError("Invalid credentials", 401, "UNAUTHENTICATED");
   }
 
