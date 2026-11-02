@@ -9,11 +9,14 @@ import jwt from 'jsonwebtoken';
 export const REFRESH_COOKIE_NAME = 'refresh_token';
 export const ACCESS_TOKEN_EXPIRES = process.env.JWT_ACCESS_EXPIRES || '15m';
 
+// Hashes the refresh token using SHA-256 for secure storage in the database.
 export const hashRefreshToken = (token) =>
   crypto.createHash('sha256').update(token).digest('hex');
 
+//generate a random refresh token (48 bytes, base64url-encoded)
 export const generateRefreshToken = () => crypto.randomBytes(48).toString('base64url');
 
+// Generates a short-lived access JWT with the given payload.
 export const signAccessToken = (payload) => {
   const secret = process.env.JWT_ACCESS_SECRET;
   if (!secret) {
@@ -25,6 +28,7 @@ export const signAccessToken = (payload) => {
   });
 };
 
+// Verifies the access JWT and returns the decoded payload. Throws an error if invalid or expired.
 export const verifyAccessToken = (token) => {
   const secret = process.env.JWT_ACCESS_SECRET;
   if (!secret) {
@@ -34,6 +38,7 @@ export const verifyAccessToken = (token) => {
   return jwt.verify(token, secret);
 };
 
+//
 export const getRefreshExpiryDate = () => {
   const days = Number(process.env.REFRESH_TOKEN_DAYS) || 30;
   const expiresAt = new Date();
@@ -41,10 +46,23 @@ export const getRefreshExpiryDate = () => {
   return expiresAt;
 };
 
+// Retrieves the client's IP address and user-agent from the request for logging or security purposes.
 export const getClientMeta = (req) => ({
   ipAddress: req.ip || req.socket?.remoteAddress || '0.0.0.0',
   userAgent: String(req.headers['user-agent'] || 'unknown').slice(0, 512)
 });
+
+// export const getClientMeta = (req) => {
+//   // declaring (Variables)
+//   const ipAddress = req.ip || req.socket?.remoteAddress || '0.0.0.0';
+//   const userAgent = String(req.headers['user-agent'] || 'unknown').slice(0, 512);
+
+//   // returning the object with ipAddress and userAgent
+//   return {
+//     ipAddress: ipAddress,
+//     userAgent: userAgent
+//   };
+// };
 
 /**
  * httpOnly refresh cookie flags.
