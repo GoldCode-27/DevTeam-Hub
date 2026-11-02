@@ -13,30 +13,39 @@ import {
 const readRefreshToken = (req) =>
   req.cookies?.[REFRESH_COOKIE_NAME] || req.body?.refresh_token || null;
 
+//get refresh token from cookie or body, if not found return null
 const setRefreshCookie = (res, refreshToken, expiresAt) => {
   res.cookie(REFRESH_COOKIE_NAME, refreshToken, getRefreshCookieOptions(expiresAt));
 };
 
+//clear refresh token cookie
 const clearRefreshCookie = (res) => {
   res.clearCookie(REFRESH_COOKIE_NAME, clearRefreshCookieOptions());
 };
 
+//strip refresh token and expiration from the response body, return public payload
 const stripRefreshFromBody = (data) => {
   const { refresh_token, refresh_expires_at, ...publicPayload } = data;
   return { publicPayload, refresh_token, refresh_expires_at };
 };
 
+//send authentication response to the client, set refresh token cookie, and return public payload
 const sendAuthResponse = (res, data, statusCode) => {
   const { publicPayload, refresh_token, refresh_expires_at } = stripRefreshFromBody(data);
   setRefreshCookie(res, refresh_token, refresh_expires_at);
-  res.status(statusCode).json({ ...publicPayload, refresh_expires_at });
+  res.status(statusCode).json({
+     ...publicPayload, refresh_expires_at 
+    });
 };
 
 //register handller
 export const registerHandler = async (req, res, next) => {
   try {
     const data = await register(req.body);
-    res.status(201).json(data);
+    res.status(201).json({
+      ...data,
+      // message: 'User registered successfully'
+    });
   } catch (error) {
     next(error);
   }

@@ -16,6 +16,7 @@ const USER_SAFE_COLUMNS = `
   job_title, status, bio, current_focus, avatar_url, last_active_at
 `;
 
+//function to find user by email or username
 const findUserByLogin = async (login) => {
   const rows = await safeQuery(
     `SELECT ${USER_SAFE_COLUMNS}, password_hash
@@ -27,6 +28,7 @@ const findUserByLogin = async (login) => {
   return rows[0] || null;
 };
 
+//function to load user permissions from database
 const loadPermissions = async (userId) => {
   const rows = await safeQuery(
     `SELECT p.slug
@@ -38,6 +40,7 @@ const loadPermissions = async (userId) => {
   return rows.map((row) => row.slug);
 };
 
+//function to convert user object to public user object with permissions
 const toPublicUser = (user, permissions = []) => ({
   public_id: user.public_id,
   username: user.username,
@@ -53,6 +56,7 @@ const toPublicUser = (user, permissions = []) => ({
   permissions,
 });
 
+//function to run a query with optional connection (for transactions)
 const runQuery = async (sql, params, connection = null) => {
   if (connection) {
     const [result] = await connection.query(sql, params);
@@ -61,6 +65,7 @@ const runQuery = async (sql, params, connection = null) => {
   return safeQuery(sql, params);
 };
 
+//function to create a new session with refresh token, store in database, and return refresh token and expiry
 const createSession = async (userId, req, connection = null) => {
   const refreshToken = generateRefreshToken();
   const refreshTokenHash = hashRefreshToken(refreshToken);
@@ -83,6 +88,7 @@ const createSession = async (userId, req, connection = null) => {
   return { refreshToken, expiresAt };
 };
 
+//function to build authentication payload with access token, refresh token, and user info
 const buildAuthPayload = async (user, refreshToken, expiresAt) => {
   const permissions = await loadPermissions(user.id);
   const accessToken = signAccessToken({
@@ -101,6 +107,7 @@ const buildAuthPayload = async (user, refreshToken, expiresAt) => {
   };
 };
 
+//function to register a new user by admin, generate temporary password, send email with temp password
 export const register = async (userData) => {
   const {
     username,
@@ -212,7 +219,8 @@ export const register = async (userData) => {
     connection.release();
   }
 };
-
+ 
+//function to verify google id token and return user profile
 export const googleLogin = async (payload = {}, req) => {
   // 1. check if the idToken is provided in the payload 
   if (!payload.idToken) {
@@ -248,6 +256,8 @@ export const googleLogin = async (payload = {}, req) => {
   const { refreshToken, expiresAt } = await createSession(safeUser.id, req);
   return buildAuthPayload(safeUser, refreshToken, expiresAt);
 };
+
+//function to authenticate user with email/username and password, return access token and refresh token
 export const login = async ({ login, password }, req) => {
   if (!login || !password) {
     throw new AppError(
@@ -293,6 +303,7 @@ export const login = async ({ login, password }, req) => {
   return buildAuthPayload(safeUser, refreshToken, expiresAt);
 };
 
+//function to refresh access token using refresh token
 export const refresh = async ({ refresh_token }, req) => {
   if (!refresh_token) {
     throw new AppError("Refresh token is required", 400, "VALIDATION_ERROR", [
@@ -380,6 +391,7 @@ export const refresh = async ({ refresh_token }, req) => {
   }
 };
 
+//fetch user by id and return public user object with permissions for access token
 export const loadUserForAccessToken = async (userId) => {
   const users = await safeQuery(
     `SELECT id, public_id, username, first_name, last_name, email, status, last_active_at
@@ -401,6 +413,7 @@ export const loadUserForAccessToken = async (userId) => {
   return user;
 };
 
+//logout function to revoke refresh token and/or all sessions for a user
 export const logout = async (
   { refresh_token, session_id, all_other_devices } = {},
   userId,
