@@ -1,4 +1,4 @@
-import { googleLogin, login, logout, refresh, register } from '../services/authService.js';
+ import { googleLogin, login, logout, refresh, } from '../services/authService.js';
 import {
   REFRESH_COOKIE_NAME,
   clearRefreshCookieOptions,
@@ -32,15 +32,6 @@ const sendAuthResponse = (res, data, statusCode) => {
   res.status(statusCode).json({ ...publicPayload, refresh_expires_at });
 };
 
-//register handller
-export const registerHandler = async (req, res, next) => {
-  try {
-    const data = await register(req.body);
-    res.status(201).json(data);
-  } catch (error) {
-    next(error);
-  }
-};
 //continue with google handller 
 export const googleAuthHandler = async (req, res, next) => {
   try {

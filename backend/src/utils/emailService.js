@@ -3,8 +3,9 @@ import nodemailer from 'nodemailer';
 const getTransporter = () => {
   const host = process.env.SMTP_HOST;
   const from = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
 
-  if (!host || !from) {
+  if (!host || !from || !pass) {
     throw new Error('Email service is not configured');
   }
 
@@ -14,8 +15,8 @@ const getTransporter = () => {
     secure: process.env.SMTP_SECURE === 'true',
     auth:
       {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS
+          user: from,
+          pass: pass
         }
      
   });

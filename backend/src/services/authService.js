@@ -1,9 +1,9 @@
-import crypto from "crypto";
+// import crypto from "crypto";
 import bcrypt from "bcrypt";
-import { v4 as uuidv4 } from "uuid";
+// import { v4 as uuidv4 } from "uuid";
 import db from "../config/db.js";
 import AppError from "../utils/appError.js";
-import { sendWelcomeEmail } from "../utils/emailService.js";
+// import { sendWelcomeEmail } from "../utils/emailService.js";
 import {ACCESS_TOKEN_EXPIRES,signRefreshToken,verifyRefreshToken,  getClientMeta,  getRefreshExpiryDate,  hashRefreshToken,  signAccessToken,
 } from "../utils/tokenUtils.js";
 import { verifyGoogleIdToken } from "../utils/googleUtils.js";
@@ -100,118 +100,6 @@ const buildAuthPayload = async (user, refreshToken, expiresAt) => {
     refresh_expires_at: expiresAt.toISOString(),
     user: toPublicUser(user, permissions),
   };
-};
-
-export const register = async (userData) => {
-  const {
-    username,
-    email,
-    first_name,
-    last_name,
-    job_title,
-    bio,
-    skills = [],
-  } = userData;
-
-  if (!username || !email || !first_name || !last_name) {
-    throw new AppError(
-      "Missing required registration fields",
-      400,
-      "VALIDATION_ERROR",
-      [
-        ...(!username
-          ? [{ field: "username", message: "Username is required" }]
-          : []),
-        ...(!email ? [{ field: "email", message: "Email is required" }] : []),
-        ...(!first_name
-          ? [{ field: "first_name", message: "First name is required" }]
-          : []),
-        ...(!last_name
-          ? [{ field: "last_name", message: "Last name is required" }]
-          : []),
-      ],
-    );
-  }
-
-  const connection = await pool.getConnection();
-  let committed = false;
-
-  try {
-    await connection.beginTransaction();
-
-    const [existing] = await connection.query(
-      `SELECT id FROM users WHERE email = ? OR username = ? LIMIT 1`,
-      [email.trim().toLowerCase(), username.trim()],
-    );
-
-    if (existing.length > 0) {
-      throw new AppError(
-        "Username or Email already exists",
-        409,
-        "DUPLICATE_ENTRY",
-      );
-    }
-
-    const tempPassword = crypto.randomBytes(4).toString("hex");
-    const passwordHash = await bcrypt.hash(tempPassword, 10);
-    const publicId = uuidv4();
-
-    const [result] = await connection.query(
-      `INSERT INTO users (public_id, username, email, password_hash, first_name, last_name, job_title, bio, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE')`,
-      [
-        publicId,
-        username.trim(),
-        email.trim().toLowerCase(),
-        passwordHash,
-        first_name.trim(),
-        last_name.trim(),
-        job_title || null,
-        bio || null,
-      ],
-    );
-
-    const userId = result.insertId;
-
-    if (Array.isArray(skills) && skills.length > 0) {
-      const skillValues = skills
-        .map((skill) => String(skill).trim())
-        .filter(Boolean)
-        .map((skill) => [userId, skill]);
-
-      if (skillValues.length > 0) {
-        await connection.query(
-          `INSERT INTO user_skills (user_id, skill) VALUES ?`,
-          [skillValues],
-        );
-      }
-    }
-
-    const [newUsers] = await connection.query(
-      `SELECT ${USER_SAFE_COLUMNS} FROM users WHERE id = ?`,
-      [userId],
-    );
-    const newUser = newUsers[0];
-
-    await sendWelcomeEmail(email.trim().toLowerCase(), tempPassword);
-
-    await connection.commit();
-    committed = true;
-
-    return {
-      success: true,
-      message:
-        "User registered successfully by admin and temporary password email sent.",
-      user: toPublicUser(newUser),
-    };
-  } catch (error) {
-    if (!committed) {
-      await connection.rollback();
-    }
-    throw error;
-  } finally {
-    connection.release();
-  }
 };
 
 export const googleLogin = async (payload = {}, req) => {
