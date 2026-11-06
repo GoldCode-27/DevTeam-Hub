@@ -38,7 +38,7 @@ export const verifyAccessToken = (token) => {
   return jwt.verify(token, secret);
 };
 
-//
+// Retrieves the expiration date for the refresh token based on the configured number of days (default: 30 days).
 export const getRefreshExpiryDate = () => {
   const days = Number(process.env.REFRESH_TOKEN_DAYS) || 30;
   const expiresAt = new Date();

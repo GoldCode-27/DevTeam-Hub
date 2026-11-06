@@ -13,6 +13,7 @@ import {
 const readRefreshToken = (req) =>
   req.cookies?.[REFRESH_COOKIE_NAME] || req.body?.refresh_token || null;
 
+
 //get refresh token from cookie or body, if not found return null
 const setRefreshCookie = (res, refreshToken, expiresAt) => {
   res.cookie(REFRESH_COOKIE_NAME, refreshToken, getRefreshCookieOptions(expiresAt));
@@ -67,13 +68,14 @@ export const loginHandler = async (req, res, next) => {
   try {
     const data = await login(
       {
-        login: req.body.login ?? req.body.email ?? req.body.username,
+        login: req.body.email ?? req.body.username,
         password: req.body.password
       },
       req
     );
     sendAuthResponse(res, data, 200);
   } catch (error) {
+    console.error('Error in loginHandler:', error);
     next(error);
   }
 };

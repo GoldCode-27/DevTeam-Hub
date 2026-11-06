@@ -8,9 +8,11 @@ import {
   ACCESS_TOKEN_EXPIRES,generateRefreshToken,getClientMeta,getRefreshExpiryDate,hashRefreshToken,signAccessToken,
 } from "../utils/tokenUtils.js";
 import { verifyGoogleIdToken } from "../utils/googleUtils.js"; 
+
 // Destructure safeQuery and pool from db.js
 const { pool, safeQuery } = db;
 
+//define the columns to select for public user data
 const USER_SAFE_COLUMNS = `
   id, public_id, username, email, first_name, last_name,
   job_title, status, bio, current_focus, avatar_url, last_active_at
@@ -219,7 +221,7 @@ export const register = async (userData) => {
     connection.release();
   }
 };
- 
+
 //function to verify google id token and return user profile
 export const googleLogin = async (payload = {}, req) => {
   // 1. check if the idToken is provided in the payload 

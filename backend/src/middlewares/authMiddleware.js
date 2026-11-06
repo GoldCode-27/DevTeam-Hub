@@ -18,7 +18,7 @@ export const authenticate = async (req, res, next) => {
         ),
       );
     }
-
+ 
     const accessToken = header.slice(7).trim();
     if (!accessToken) {
       return next(new AppError("Missing access token", 401, "UNAUTHENTICATED"));

@@ -25,15 +25,10 @@ const router = express.Router();
  * POST /api/auth/logout
  */
 
-router.post(
-  '/register',
-  authenticate,
-  requirePermission('user:manage'),
-  registerHandler
-);
+router.post('/register',authenticate,requirePermission('user:manage'),registerHandler);
 router.post('/google', loginRateLimiter, googleAuthHandler);
 router.post('/login', loginRateLimiter, loginHandler);
 router.post('/refresh', refreshRateLimiter, refreshHandler);
 router.post('/logout', authenticate, logoutHandler);
-
-export default router;
+ 
+export default router; 
