@@ -107,7 +107,9 @@ export const onboardUser = async (req, res, next) => {
 
     return res.status(201).json(result);
   } catch (error) {
+    // console.error('Error in onboardUser:', error);
     next(error);
+
   }
 };
 
@@ -140,7 +142,7 @@ export const updateMemberByAdmin = async (req, res, next) => {
  */
 export const updateVisibilityBulk = async (req, res, next) => {
   try {
-    const { target, is_public } = req.body;
+    const { target, is_public } = req.body ?? {};
 
     const result = await bulkUpdateVisibility({
       target,

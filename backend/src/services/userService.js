@@ -533,7 +533,7 @@ export const createTeamMember = async ({ full_name, email, permissions = [], adm
       `SELECT created_at FROM users WHERE id = ?`,
       [newUserId]
     );
-
+ 
     await connection.commit();
     committed = true;
 
@@ -775,8 +775,12 @@ export const bulkUpdateVisibility = async ({ target, is_public }) => {
     throw new AppError("Target ('tasks' or 'resources') is required", 400, 'VALIDATION_ERROR');
   }
 
+  if (typeof is_public !== 'boolean') {
+    throw new AppError("'is_public' must be a boolean", 400, 'VALIDATION_ERROR');
+  }
+
   const normalizedTarget = String(target).trim().toLowerCase();
-  const visibilityFlag = Boolean(is_public);
+  const visibilityFlag = is_public;
 
   let updatedCount = 0;
 
