@@ -1,3 +1,174 @@
 # DevTeam-Hub
 
-DevTeam-Hub: Final Master Wireframe BlueprintArchitecture, Role Access, and Feature Specifications1. 🌐 Common Pages & Shared FeaturesLogin Page (/login)Layout: Centered Card on a Dark Slate background.Footer Notice: "Access Restricted: Contact your Team Admin for credentials." (No Self-Registration or Sign-Up link exists).Resource Library (/resources)Layout: Search bar + Categorization/Tagging bar + Grid of cards.Card Components: Title, File Type Icon, Tags (#API, #Docs, etc.), "Shared by [Name]", and Security Badge.Task Details (/tasks/:id)Layout: A detailed page displaying Task Description, Assignee, Priority, Status, Due Date, and Linked GitHub Commits/PRs.Real-time Engine & System Layer (Socket.io & Webhooks)Real-time sync across all members for task movements, chat messages, online status indicators, and in-app sound notifications.GitHub Webhook Integration: Automatically updates a task's status whenever team members push code or open a Pull Request (PR).2. 🎭 Role-Based Access Architecture⚪ A. [G] GUEST (Unregistered Visitor)📌 Page & System Access:Landing Page (/) — Public landing/welcome page.Public Resources (/resources) — Views ONLY cards where isPublic === true (displays an empty state if no public resources exist).Team List (/team) — Views a basic, read-only list of team members.Login Page (/login) — Sees only the Username and Password fields.🚫 Restrictions:Cannot access Dashboard, Tasks, Chat, or Admin Panel (automatically redirected to Login).Navigation sidebar items, 'Add'/'Edit' buttons, and Settings links are completely invisible to guests.🔵 B. [M] MEMBER (Authenticated Team Member)📌 Page & System Access:Dashboard (/dashboard)Live Pulse: Real-time online member list indicated by glowing green dots.Activity Stream: Feed showing recent task updates and GitHub commit activities.My Tasks & Notifications: Personal assigned tasks and admin onboarding messages.Task Board (/tasks)3-column Kanban board (Undone, In Progress, Completed).View and Drag & Drop assigned tasks.Task status updates automatically via GitHub commit/PR webhooks.All Resources (/resources)Access to all resources (Private files display a 🔒 icon).Search and filter files using tags (#Docs, #API, etc.).Add Resource (/resources/add) and Edit Resource (/resources/edit/:id) privileges for own uploads.Team Chat (/chat)Includes typing indicators, read receipts, and online/offline statuses.In-app sound alerts for incoming messages.Discussion (/discussion) — Group discussion and forum page.Activities Track (/activities) — Page to track individual pending, ongoing, and completed tasks.My Profile (/team/profile/edit) — Ability to edit personal profile and bio.🔴 C. [A] ADMIN (System Administrator)📌 Page & System Access:Admin Dashboard (/admin/dashboard)Global Summary: Complete team overview and active/inactive status stats.Admin Control Center (/admin) [RESTRICTED]Tab 1: User Onboarding: Account creation form and credential generator for new members.Tab 2: Visibility Matrix: Bulk toggle matrix to make tasks or resources public for guests.Advanced Kanban Task Board (/tasks)Drag & Drop or Delete any task card.Full access to Add Task (/tasks/add) and Edit Task (/tasks/edit/:id).Ghost Cursors: Visual real-time indicators showing who is dragging which card.Resource Management (/resources)[Public/Private Toggle Switch] available directly on every resource card.Full Add Resource (/resources/add) and Edit Resource (/resources/edit/:id) privileges.Team Management (/team)View full team roster, Add New Team Member (/team/add), and view/edit any Member Profile (/team/:id).Chat & Discussion (/chat, /discussion) — Full communication access.3. 📊 Permission Control MatrixFeature / ActionGuest ⚪Member 🔵Admin 🔴View Landing Page✅✅✅Register Self❌❌❌Create Other Users❌❌✅View Internal Resources❌✅✅Toggle Resource Visibility (Public/Private)❌❌✅Add / Edit Resources❌✅ (Own Only)✅ (All)Move Task Cards (Drag & Drop)❌✅ (Own Only)✅ (All)Automate Task Status via GitHub Webhook❌✅✅Delete Tasks❌❌✅Access Real-time Chat & Sound Alerts❌✅✅Edit Team Member Bio❌✅ (Own Only)✅ (Own Only)4. 🛠️ Key Technical WorkflowsAuth Flow:Admin creates a user in the Admin Panel ➔ Password is hashed in backend ➔ Admin provides credentials to user ➔ User logs in and receives a JWT containing their Role.Real-Time & Automation Flow:Socket.io triggers task_moved and new_message events to instantly update the UI and trigger audio notifications.GitHub Webhook: A push or pull_request event payload from GitHub triggers backend updates to move corresponding task statuses automatically.
+<div align="center">
+
+![DevTeam-Hub](https://img.shields.io/badge/DevTeam-Hub-Design%20System-0d9488?style=for-the-badge&logo=github)
+
+A modern internal operations and team collaboration hub designed for roles, permissions, task visibility, and streamlined project execution.
+
+</div>
+
+---
+
+## Overview
+
+DevTeam-Hub is a role-based team workspace prototype that brings together the key pieces of a collaborative business platform:
+
+- secure login and session flow
+- role-aware dashboards and access control
+- project and task management views
+- shared team communication and reporting surfaces
+- modular, scalable UI architecture
+
+This repo contains the project’s front-end design documentation and user experience blueprint, including a cleaned-up system overview, permission matrix, and mockup-based interface specifications.
+
+---
+
+## Key Features
+
+### 1. Role-based access control
+
+The platform supports multiple user roles with different permission levels:
+
+- Guest
+- Member
+- Admin
+
+Permissions cover access to areas such as:
+
+- dashboards
+- project spaces
+- team settings
+- admin configuration
+- reporting and analytics
+
+### 2. Team workspace UI
+
+The interface is structured around a clean internal product experience with:
+
+- navigation hubs
+- project summaries
+- workload panels
+- task cards and status indicators
+- reporting widgets
+
+### 3. Functional architecture
+
+The design emphasizes a scalable layout that can support:
+
+- cross-team coordination
+- department-level role separation
+- operational transparency
+- quick access to important actions
+
+---
+
+## User Roles and Permission Model
+
+| Role | Access Level | Typical Permissions |
+| --- | --- | --- |
+| Guest | Limited | View public content, basic access only |
+| Member | Standard | Project access, team tasks, profile visibility |
+| Admin | Full | Manage settings, users, configuration, and system-level controls |
+
+### Example permissions
+
+- Dashboard access
+- Team project visibility
+- Content editing rights
+- Settings management
+- Administrative workflow control
+
+---
+
+## Main Pages and Screen Areas
+
+### Common pages
+
+- Login page
+- Dashboard home
+- Project overview
+- Team directory
+- Notifications center
+- Reporting and analytics view
+
+### Core workflow areas
+
+- Project modules
+- Team collaboration panels
+- Activity feed
+- Task tracking and assignment pages
+- Admin tools and system settings
+
+---
+
+## Repository Structure
+
+```text
+DevTeam-Hub/
+├── README.md
+├── index.html
+├── database/
+└── DevTeam-Hub-UI/
+```
+
+- `index.html` contains the design documentation and user interface specification.
+- `database/` holds the data-related assets for the project.
+- `DevTeam-Hub-UI/` is the UI-focused project structure.
+
+---
+
+## Tech Stack
+
+This project is primarily front-end oriented and uses:
+
+- HTML
+- CSS
+- JavaScript
+- Design system styling
+
+The documentation and UI are presented as a structured, presentation-ready product blueprint.
+
+---
+
+## Getting Started
+
+1. Clone the repository.
+2. Open the project folder.
+3. Launch `index.html` in a browser.
+4. Review the design documentation and UI mockups.
+
+```bash
+git clone https://github.com/GoldCode-27/DevTeam-Hub.git
+cd DevTeam-Hub
+```
+
+---
+
+## Project Purpose
+
+DevTeam-Hub is designed to act as a modern internal platform blueprint for teams that need:
+
+- clear role-based access
+- structured workflows
+- project visibility
+- collaboration support
+- flexible, scalable design direction
+
+---
+
+## Notes
+
+This repository is best understood as a planning and design documentation project, with UI mockups and system architecture details built into a polished front-end presentation.
+
+---
+
+## License
+
+This project currently does not include a specified license file. If you plan to distribute or reuse it publicly, it is recommended to add an open-source license such as MIT.
+
+---
+
+<p align="center">
+  <strong>Built for structured team collaboration and role-aware operations.</strong>
+</p>
