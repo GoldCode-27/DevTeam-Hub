@@ -1,129 +1,91 @@
-import db from "../config/db.js";
-import { getFileType } from "../utils/storage.js";
+import AppError from "../utils/appError.js";
+import * as publicService from "../services/publicService.js";
 
-const pool = db.pool;
+const SECTIONS = ["resources", "tasks", "team"];
+const CACHE_TTL_SECONDS = Number(process.env.PUBLIC_CACHE_TTL_SECONDS) || 30;
+const CACHE_MAX_ENTRIES = 200; // stops random query strings from filling memory
 
-// In-memory cache for 30 seconds
-let memoryCache = { data: null, expiresAt: 0 };
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+const wrap = (handler) => (req, res, next) =>
+  Promise.resolve(handler(req, res, next)).catch(next);
 
-export const getPublicWorkspace = async (req, res, next) => {
-  try {
-    const { sections = "resources,tasks,team", q, tags } = req.query;
-    const requested = sections.split(",").map((s) => s.trim().toLowerCase());
-
-    const isSimpleRequest = !q && !tags;
-    const now = Date.now();
-
-    // Serve from cache if active and no search filters applied
-    if (isSimpleRequest && memoryCache.data && memoryCache.expiresAt > now) {
-      return res.status(200).json(memoryCache.data);
-    }
-
-    const response = {};
-
-    // 1. PUBLIC RESOURCES
-    if (requested.includes("resources")) {
-      let conditions = ["r.is_public = TRUE"];
-      let params = [];
-
-      if (q) {
-        conditions.push("(r.title LIKE ? OR r.description LIKE ?)");
-        params.push(`%${q}%`, `%${q}%`);
-      }
-
-      const [resources] = await pool.query(
-        `SELECT r.public_id, r.title, r.description, r.file_type, r.file_url, r.file_size_bytes,
-                r.is_public, r.security_badge, r.download_count, r.created_at,
-                u.first_name, u.last_name, u.avatar_url,
-                COALESCE(
-                  JSON_ARRAYAGG(
-                    IF(t.id IS NOT NULL, JSON_OBJECT('id', t.id, 'name', t.name, 'color_hex', t.color_hex), NULL)
-                  ), JSON_ARRAY()
-                ) AS tags
-         FROM resources r
-         LEFT JOIN users u ON r.user_id = u.id
-         LEFT JOIN resource_tags rt ON r.id = rt.resource_id
-         LEFT JOIN tags t ON rt.tag_id = t.id
-         WHERE ${conditions.join(" AND ")}
-         GROUP BY r.id
-         ORDER BY r.created_at DESC
-         LIMIT 20`,
-        params,
-      );
-
-      response.resources = resources.map((res) => ({
-        public_id: res.public_id,
-        title: res.title,
-        description: res.description,
-        file_type: res.file_type,
-        file_url: res.file_url,
-        file_size_bytes: res.file_size_bytes,
-        is_public: true,
-        security_badge: "PUBLIC",
-        download_count: res.download_count,
-        created_at: res.created_at,
-        tags: (typeof res.tags === "string"
-          ? JSON.parse(res.tags)
-          : res.tags
-        ).filter(Boolean),
-        uploaded_by: {
-          first_name: res.first_name,
-          last_name: res.last_name,
-          avatar_url: res.avatar_url,
-        },
-      }));
-    }
-
-    // 2. PUBLIC TASKS (Grouped by status for Kanban preview)
-    if (requested.includes("tasks")) {
-      const [tasks] = await pool.query(
-        `SELECT task_code, title, status, priority, position
-         FROM tasks
-         WHERE is_public = TRUE
-         ORDER BY position ASC`,
-      );
-
-      response.tasks = {
-        UNDONE: tasks.filter((t) => t.status === "UNDONE"),
-        IN_PROGRESS: tasks.filter((t) => t.status === "IN_PROGRESS"),
-        COMPLETED: tasks.filter((t) => t.status === "COMPLETED"),
-      };
-    }
-
-    // 3. MEET THE TEAM (Active developers only, strictly NO EMAILS)
-    if (requested.includes("team")) {
-      const [members] = await pool.query(
-        `SELECT first_name, last_name, job_title, bio, avatar_url, last_active_at
-         FROM users
-         WHERE status = 'ACTIVE'
-         ORDER BY first_name ASC`,
-      );
-
-      const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
-      const formatted = members.map((m) => ({
-        first_name: m.first_name,
-        last_name: m.last_name,
-        job_title: m.job_title,
-        bio: m.bio,
-        avatar_url: m.avatar_url,
-        presence:
-          new Date(m.last_active_at) > twoMinutesAgo ? "online" : "away",
-      }));
-
-      response.team = {
-        total: formatted.length,
-        online: formatted.filter((m) => m.presence === "online").length,
-        members: formatted,
-      };
-    }
-
-    // Cache the clean result for 30 seconds
-    if (isSimpleRequest) {
-      memoryCache = { data: response, expiresAt: now + 30 * 1000 };
-    }
-
-    res.status(200).json(response);
-  } catch (err) {
-    next(err);
-  }
+const fail = (details) => {
+  throw new AppError("Validation failed", 422, "VALIDATION_ERROR", details);
 };
+
+// Query values can be strings, arrays (?a=1&a=2) or objects (?a[b]=1): normalise to a list of strings
+const toList = (value) =>
+  []
+    .concat(value ?? [])
+    .flatMap((v) => (typeof v === "string" ? v.split(",") : [String(v)]))
+    .map((v) => v.trim())
+    .filter(Boolean);
+
+function parseQuery(query = {}) {
+  const requested = toList(query.sections).map((s) => s.toLowerCase());
+  const unknown = requested.filter((s) => !SECTIONS.includes(s));
+  if (unknown.length) {
+    fail([
+      {
+        field: "sections",
+        message: `Unknown section(s): ${unknown.join(", ")}. Use ${SECTIONS.join(", ")}`,
+      },
+    ]);
+  }
+
+  const tags = [
+    ...new Map(toList(query.tags).map((t) => [t.toLowerCase(), t])).values(),
+  ];
+  if (tags.length > 10 || tags.some((t) => t.length > 50)) {
+    fail([{ field: "tags", message: "Max 10 tags, each up to 50 characters" }]);
+  }
+
+  const first = [].concat(query.q ?? [])[0];
+  return {
+    sections: requested.length ? [...new Set(requested)].sort() : [...SECTIONS],
+    q: typeof first === "string" ? first.trim().slice(0, 100) : "",
+    tags,
+    page: Math.max(parseInt(query.page, 10) || 1, 1),
+    perPage: Math.min(Math.max(parseInt(query.per_page, 10) || 20, 1), 100),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Tiny cache. The key contains EVERY parameter (sections, q, tags, page), so a
+// "team only" answer can never be served for a "everything" request.
+// It stores the promise, so 100 guests arriving together cause only ONE database load.
+// ---------------------------------------------------------------------------
+const cache = new Map(); // key -> { promise, expiresAt }
+
+function cached(key, load) {
+  const hit = cache.get(key);
+  if (hit && hit.expiresAt > Date.now()) return hit.promise;
+
+  const promise = load();
+  if (cache.size >= CACHE_MAX_ENTRIES) cache.delete(cache.keys().next().value);
+  cache.set(key, { promise, expiresAt: Date.now() + CACHE_TTL_SECONDS * 1000 });
+  // never keep a failed result
+  promise.catch(() => {
+    if (cache.get(key)?.promise === promise) cache.delete(key);
+  });
+  return promise;
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/public: guest landing page data (no login)
+// ---------------------------------------------------------------------------
+export const getPublicWorkspace = wrap(async (req, res) => {
+  const params = parseQuery(req.query);
+  const key = JSON.stringify({
+    ...params,
+    tags: params.tags.map((t) => t.toLowerCase()).sort(),
+  });
+
+  const data = await cached(key, () =>
+    publicService.getPublicWorkspace(params),
+  );
+
+  res.set("Cache-Control", `public, max-age=${CACHE_TTL_SECONDS}`).json(data);
+});
