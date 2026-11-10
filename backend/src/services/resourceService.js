@@ -6,31 +6,47 @@ import { getFileType, deleteLocalFile } from "../utils/storage.js";
 
 const pool = db.pool;
 
+const APP_URL = (process.env.APP_URL ?? "http://localhost:8080").replace(
+  /\/$/,
+  "",
+);
+const DEFAULT_TAG_COLOR = "#6366F1";
+
 // ===========================================================================
 // Core Infrastructure: Atomic Transaction Manager
 // ===========================================================================
 
 /**
- * Higher-order database transaction runner.
- * Automatically guarantees acquisition, commit, automatic rollback on fault,
- * and guaranteed connection release.
+ * Runs `workUnit` inside one database transaction: commit on success, rollback on
+ * any error, and the connection is always returned to the pool.
+ * If the database reports a deadlock (two transactions waiting for each other, which
+ * MySQL itself recommends retrying), the whole unit is run again, up to 3 times.
  *
  * @template T
  * @param {(conn: import('mysql2/promise').PoolConnection) => Promise<T>} workUnit
  * @returns {Promise<T>}
  */
 async function withTransaction(workUnit) {
-  const conn = await pool.getConnection();
-  try {
-    await conn.beginTransaction();
-    const result = await workUnit(conn);
-    await conn.commit();
-    return result;
-  } catch (err) {
-    await conn.rollback();
-    throw err;
-  } finally {
-    conn.release();
+  const MAX_ATTEMPTS = 3;
+  for (let attempt = 1; ; attempt++) {
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      const result = await workUnit(conn);
+      await conn.commit();
+      return result;
+    } catch (err) {
+      await conn.rollback().catch(() => {}); // never hide the original error
+      if (err.code === "ER_LOCK_DEADLOCK" && attempt < MAX_ATTEMPTS) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, 15 * attempt + Math.random() * 25),
+        );
+        continue;
+      }
+      throw err;
+    } finally {
+      conn.release();
+    }
   }
 }
 
@@ -38,75 +54,96 @@ async function withTransaction(workUnit) {
 // Domain Helpers & Data Mappers
 // ===========================================================================
 
+const toBool = (value) =>
+  value === true || ["true", "1"].includes(String(value).toLowerCase());
+
+// Public resources always carry PUBLIC. A private one never keeps PUBLIC, but
+// keeps a stricter badge (INTERNAL / RESTRICTED) it already had.
+const resolveBadge = (isPublic, currentBadge) => {
+  if (isPublic) return "PUBLIC";
+  return currentBadge && currentBadge !== "PUBLIC" ? currentBadge : "INTERNAL";
+};
+
+// Path stored in the database: relative to the project folder, with forward slashes
+const toStoredPath = (file) =>
+  path.relative(process.cwd(), file.path).replace(/\\/g, "/");
+
 /**
- * Normalizes user input into a deduplicated, sanitized list of non-empty tag names.
+ * Normalizes user input into a list of clean tag names.
+ * Duplicates are removed ignoring upper/lower case ("Docs" and "docs" are the same tag);
+ * the first spelling wins.
  * @param {string[]|string|null|undefined} raw
  * @returns {string[]}
  */
 function sanitizeTagNames(raw) {
   if (!raw) return [];
   const entries = Array.isArray(raw) ? raw : String(raw).split(",");
-  return Array.from(
-    new Set(
-      entries
-        .map((t) => String(t).trim())
-        .filter((t) => t.length > 0 && t.length <= 50),
-    ),
-  );
+  const unique = new Map();
+  for (const entry of entries) {
+    const name = String(entry).trim();
+    if (
+      name.length > 0 &&
+      name.length <= 50 &&
+      !unique.has(name.toLowerCase())
+    ) {
+      unique.set(name.toLowerCase(), name);
+    }
+  }
+  return [...unique.values()];
 }
 
 /**
- * Synchronizes tags for a resource atomically within an existing connection boundary.
- * Executes set-based inserts to avoid N+1 query overhead.
- *
- * @param {import('mysql2/promise').PoolConnection} conn
- * @param {number} resourceInternalId
- * @param {string[]} tagNames
+ * Makes the tags of a resource equal to `tagNames`, inside an existing transaction.
+ *  - missing tags are created with INSERT IGNORE (never fails if another request created
+ *    the same tag a moment earlier); names are inserted in alphabetical order so two
+ *    requests can never wait for each other in a circle
+ *  - only the DIFFERENCE is written: removed tags are deleted by exact key, added tags are
+ *    inserted. (A blanket "DELETE ... WHERE resource_id = ?" locks an empty range for a new
+ *    resource and makes parallel requests deadlock.)
  */
-async function syncResourceTags(conn, resourceInternalId, tagNames) {
-  // 1. Clear stale associations
-  await conn.query("DELETE FROM resource_tags WHERE resource_id = ?", [
-    resourceInternalId,
-  ]);
-  if (tagNames.length === 0) return;
-
-  // 2. Fetch or create missing tags
-  const [existingTags] = await conn.query(
-    "SELECT id, name FROM tags WHERE name IN (?)",
-    [tagNames],
-  );
-
-  const existingMap = new Map(
-    existingTags.map((t) => [t.name.toLowerCase(), t.id]),
-  );
-  const missingNames = tagNames.filter(
-    (name) => !existingMap.has(name.toLowerCase()),
-  );
-
-  for (const newName of missingNames) {
-    const [result] = await conn.query(
-      "INSERT INTO tags (name, color_hex) VALUES (?, ?)",
-      [newName, "#6366F1"],
+async function syncResourceTags(conn, resourceId, tagNames) {
+  let wantedIds = [];
+  if (tagNames.length > 0) {
+    const ordered = [...tagNames].sort((a, b) =>
+      a.toLowerCase().localeCompare(b.toLowerCase()),
     );
-    existingMap.set(newName.toLowerCase(), result.insertId);
+    await conn.query("INSERT IGNORE INTO tags (name, color_hex) VALUES ?", [
+      ordered.map((name) => [name, DEFAULT_TAG_COLOR]),
+    ]);
+    const [tagRows] = await conn.query(
+      "SELECT id FROM tags WHERE name IN (?)",
+      [tagNames],
+    );
+    wantedIds = tagRows.map((t) => t.id);
   }
 
-  // 3. Batch insert relationship mappings
-  const relationshipValues = tagNames.map((name) => [
-    resourceInternalId,
-    existingMap.get(name.toLowerCase()),
-  ]);
-
-  await conn.query(
-    "INSERT IGNORE INTO resource_tags (resource_id, tag_id) VALUES ?",
-    [relationshipValues],
+  // a plain SELECT takes no locks
+  const [currentRows] = await conn.query(
+    "SELECT tag_id FROM resource_tags WHERE resource_id = ?",
+    [resourceId],
   );
+  const current = new Set(currentRows.map((row) => row.tag_id));
+  const wanted = new Set(wantedIds);
+
+  const toRemove = [...current].filter((id) => !wanted.has(id));
+  const toAdd = [...wanted].filter((id) => !current.has(id));
+
+  if (toRemove.length > 0) {
+    await conn.query(
+      "DELETE FROM resource_tags WHERE resource_id = ? AND tag_id IN (?)",
+      [resourceId, toRemove],
+    );
+  }
+  if (toAdd.length > 0) {
+    await conn.query(
+      "INSERT INTO resource_tags (resource_id, tag_id) VALUES ?",
+      [toAdd.map((id) => [resourceId, id])],
+    );
+  }
 }
 
 /**
- * Efficiently loads tags for an array of internal resource IDs in a single batch query.
- * Eliminates all string concatenation and JSON aggregate database incompatibility.
- *
+ * Loads the tags of many resources with ONE query.
  * @param {number[]} resourceIds
  * @returns {Promise<Map<number, Array<{id: number, name: string, color_hex: string}>>>}
  */
@@ -117,27 +154,128 @@ async function fetchTagsForResourceBatch(resourceIds) {
   resourceIds.forEach((id) => tagMap.set(id, []));
 
   const [rows] = await pool.query(
-    `SELECT rt.resource_id, t.id, t.name, COALESCE(t.color_hex, '#6366F1') as color_hex
-     FROM resource_tags rt
-     INNER JOIN tags t ON rt.tag_id = t.id
-     WHERE rt.resource_id IN (?)
-     ORDER BY t.name ASC`,
+    `SELECT rt.resource_id, t.id, t.name, COALESCE(t.color_hex, '${DEFAULT_TAG_COLOR}') AS color_hex
+       FROM resource_tags rt
+       INNER JOIN tags t ON rt.tag_id = t.id
+      WHERE rt.resource_id IN (?)
+      ORDER BY t.name ASC`,
     [resourceIds],
   );
 
   for (const row of rows) {
-    tagMap.get(row.resource_id)?.push({
-      id: row.id,
-      name: row.name,
-      color_hex: row.color_hex,
-    });
+    tagMap
+      .get(row.resource_id)
+      ?.push({ id: row.id, name: row.name, color_hex: row.color_hex });
   }
-
   return tagMap;
 }
 
+const SELECT_RESOURCE = `
+  SELECT r.id, r.public_id, r.title, r.description, r.file_type, r.file_url, r.file_size_bytes,
+         r.is_public, r.security_badge, r.download_count, r.created_at,
+         u.public_id AS uploader_public_id, u.username, u.first_name, u.last_name, u.avatar_url
+    FROM resources r
+    LEFT JOIN users u ON r.uploaded_by = u.id`;
+
+// Uploaded files are private: clients get the download endpoint, never the internal disk path.
+// Links keep their external URL.
+const fileUrlFor = (row) =>
+  row.file_type === "LINK"
+    ? row.file_url
+    : `${APP_URL}/api/resources/${row.public_id}/download`;
+
+/** Database row -> API shape (one place, used by list, create and update). */
+function toResourceDto(row, tags = []) {
+  return {
+    public_id: row.public_id,
+    title: row.title,
+    description: row.description,
+    file_type: row.file_type,
+    file_url: fileUrlFor(row),
+    file_size_bytes:
+      row.file_size_bytes === null ? null : Number(row.file_size_bytes),
+    is_public: Boolean(row.is_public),
+    security_badge: row.security_badge,
+    download_count: row.download_count,
+    created_at: row.created_at,
+    tags,
+    uploaded_by: {
+      public_id: row.uploader_public_id,
+      username: row.username,
+      first_name: row.first_name,
+      last_name: row.last_name,
+      avatar_url: row.avatar_url,
+    },
+  };
+}
+
+/** Reads one resource back from the database (so responses always show the real saved data). */
+async function getResourceDto(publicId) {
+  const [rows] = await pool.query(
+    `${SELECT_RESOURCE} WHERE r.public_id = ? LIMIT 1`,
+    [publicId],
+  );
+  if (rows.length === 0)
+    throw new AppError("Resource not found", 404, "NOT_FOUND");
+  const tagsByResourceId = await fetchTagsForResourceBatch([rows[0].id]);
+  return toResourceDto(rows[0], tagsByResourceId.get(rows[0].id) ?? []);
+}
+
+async function findRow(publicId, conn = pool, { forUpdate = false } = {}) {
+  const [rows] = await conn.query(
+    `SELECT * FROM resources WHERE public_id = ? LIMIT 1 ${forUpdate ? "FOR UPDATE" : ""}`,
+    [publicId],
+  );
+  if (rows.length === 0)
+    throw new AppError("Resource not found", 404, "NOT_FOUND");
+  return rows[0];
+}
+//buildListFilters (የፍለጋ ማጣሪያዎችን በብልሃት መገንቢያ)
+
+function buildListFilters({ q, tags, visibility }) {
+  const predicates = ["1=1"];
+  const params = [];
+
+  if (q) {
+    const tokens = q
+      .replace(/[+\-<>()~*"@]/g, " ")
+      .split(/\s+/)
+      .filter(Boolean);
+    if (tokens.length > 0 && tokens.every((t) => t.length >= 3)) {
+      // FULLTEXT index idx_ft_resources (it only indexes words of 3+ letters)
+      predicates.push(
+        "MATCH(r.title, r.description) AGAINST (? IN BOOLEAN MODE)",
+      );
+      params.push(tokens.map((t) => `+${t}*`).join(" "));
+    } else {
+      // short searches: LIKE, with % and _ escaped so they mean themselves
+      const like = `%${q.replace(/[\\%_]/g, "\\$&")}%`;
+      predicates.push("(r.title LIKE ? OR r.description LIKE ?)");
+      params.push(like, like);
+    }
+  }
+//visibility ላይ የተመሰረተ ፍለጋ ማጣሪያ
+  if (visibility === "public") {
+    predicates.push("r.is_public = TRUE");
+  } else if (visibility === "private" || visibility === "internal") {
+    predicates.push("r.is_public = FALSE");
+  }
+//resource_tags እና tags ላይ የተመሰረተ ፍለጋ ማጣሪያ
+  if (tags.length > 0) {
+    // any of the selected tags
+    predicates.push(`EXISTS (
+      SELECT 1 FROM resource_tags rt
+      INNER JOIN tags t ON rt.tag_id = t.id
+      WHERE rt.resource_id = r.id AND t.name IN (?)
+    )`);
+    params.push(tags);
+  }
+
+  return { whereClause: predicates.join(" AND "), params };
+}
+
 // ===========================================================================
-// T20: List Resources (Query Pipeline)
+// T20: List Resources
 // ===========================================================================
 
 export async function listResources({
@@ -146,93 +284,49 @@ export async function listResources({
   visibility,
   page = 1,
   per_page = 20,
-}) {
+} = {}) {
   const pageNumber = Math.max(1, parseInt(page, 10) || 1);
   const pageSize = Math.min(100, Math.max(1, parseInt(per_page, 10) || 20));
   const offset = (pageNumber - 1) * pageSize;
 
-  const predicates = ["1=1"];
-  const params = [];
+  const search = q ? String(q).trim().slice(0, 100) : "";
+  //የማጣሪያ ህግ መገንቢያ (Filter Generation)
+  const { whereClause, params } = buildListFilters({
+    q: search,
+    tags: sanitizeTagNames(tags),
+    visibility,
+  });
 
-  // Search filter
-  if (q && String(q).trim()) {
-    predicates.push("(r.title LIKE ? OR r.description LIKE ?)");
-    const searchTerm = `%${String(q).trim()}%`;
-    params.push(searchTerm, searchTerm);
-  }
+  // the three independent queries run at the same time
+  const [[countRows], [resources], [allAvailableTags]] = await Promise.all([
+    //የመጀመሪያው ጥያቄ (የፋይሎች ብዛት መቁጠሪያ)
+    pool.query(
+      `SELECT COUNT(r.id) AS total FROM resources r WHERE ${whereClause}`,
+      params,
+    ),
+    //ሁለተኛው ጥያቄ (ትክክለኛዎቹን ፋይሎች ማምጫ)
+    pool.query(
+      `${SELECT_RESOURCE}
+        WHERE ${whereClause}
+        ORDER BY r.created_at DESC, r.id DESC
+        LIMIT ? OFFSET ?`,
+      [...params, pageSize, offset],
+    ),
+    //ሶስተኛው ጥያቄ (ሁሉንም የሚገኙ መለያዎችን ማምጫ)
+    pool.query("SELECT id, name, color_hex FROM tags ORDER BY name ASC"),
+  ]);
 
-  // Visibility state
-  if (visibility === "public") {
-    predicates.push("r.is_public = TRUE");
-  } else if (visibility === "private" || visibility === "internal") {
-    predicates.push("r.is_public = FALSE");
-  }
-
-  // Tag filter
-  const filterTags = sanitizeTagNames(tags);
-  if (filterTags.length > 0) {
-    predicates.push(`EXISTS (
-      SELECT 1 FROM resource_tags rt
-      INNER JOIN tags t ON rt.tag_id = t.id
-      WHERE rt.resource_id = r.id AND t.name IN (?)
-    )`);
-    params.push(filterTags);
-  }
-
-  const whereClause = predicates.join(" AND ");
-
-  // 1. Pagination Total Count
-  const [countRows] = await pool.query(
-    `SELECT COUNT(r.id) AS total FROM resources r WHERE ${whereClause}`,
-    params,
-  );
-  const total = countRows[0]?.total ?? 0;
-
-  // 2. Fetch Primary Resource Records
-  const [resources] = await pool.query(
-    `SELECT r.id, r.public_id, r.title, r.description, r.file_type, r.file_url, r.file_size_bytes,
-            r.is_public, r.security_badge, r.download_count, r.created_at,
-            u.public_id AS uploader_id, u.username, u.first_name, u.last_name, u.avatar_url
-     FROM resources r
-     LEFT JOIN users u ON r.uploaded_by = u.id
-     WHERE ${whereClause}
-     ORDER BY r.created_at DESC
-     LIMIT ? OFFSET ?`,
-    [...params, pageSize, offset],
-  );
-
-  // 3. Hydrate Associated Tags via Single Batch Query (Clean Data Modeling)
-  const resourceIds = resources.map((r) => r.id);
-  const tagsByResourceId = await fetchTagsForResourceBatch(resourceIds);
-
-  const [allAvailableTags] = await pool.query(
-    "SELECT id, name, color_hex FROM tags ORDER BY name ASC",
+  const tagsByResourceId = await fetchTagsForResourceBatch(
+    resources.map((r) => r.id),
   );
 
   return {
     page: pageNumber,
     per_page: pageSize,
-    total,
-    resources: resources.map((r) => ({
-      public_id: r.public_id,
-      title: r.title,
-      description: r.description,
-      file_type: r.file_type,
-      file_url: r.file_url,
-      file_size_bytes: r.file_size_bytes,
-      is_public: Boolean(r.is_public),
-      security_badge: r.security_badge,
-      download_count: r.download_count,
-      created_at: r.created_at,
-      tags: tagsByResourceId.get(r.id) ?? [],
-      uploaded_by: {
-        public_id: r.uploader_id,
-        username: r.username,
-        first_name: r.first_name,
-        last_name: r.last_name,
-        avatar_url: r.avatar_url,
-      },
-    })),
+    total: countRows[0]?.total ?? 0,
+    resources: resources.map((r) =>
+      toResourceDto(r, tagsByResourceId.get(r.id) ?? []),
+    ),
     meta: { tags: allAvailableTags },
   };
 }
@@ -250,86 +344,56 @@ export async function createResource({
   link_url,
   user,
 }) {
-  if (!title || !String(title).trim()) {
-    throw new AppError("Resource title is required", 400, "VALIDATION_ERROR");
+  const cleanTitle = String(title ?? "").trim();
+  if (!cleanTitle) {
+    throw new AppError("Resource title is required", 422, "VALIDATION_ERROR", [
+      { field: "title", message: "Title is required" },
+    ]);
   }
-
-  const userId = user?.id || user?.user_id || user?.uid || 1;
-  const userPublicId =
-    user?.public_id || "3f1c9a52-6b7e-4c1d-9a0e-2f4d8b7a1c11";
-  const username = user?.username || "alex.chen";
-  const firstName = user?.first_name || "Alex";
-  const lastName = user?.last_name || "Chen";
-  const avatarUrl =
-    user?.avatar_url || "https://cdn.devteam-hub.com/avatars/alex.webp";
+  if (!file && !link_url) {
+    throw new AppError("Provide a file or link_url", 422, "VALIDATION_ERROR", [
+      { field: "file", message: "Provide a file or link_url" },
+    ]);
+  }
+  // No silent fallback to "user 1": the uploader must be the logged-in user
+  if (!user?.id)
+    throw new AppError("Authentication required", 401, "UNAUTHENTICATED");
 
   const publicId = crypto.randomUUID();
-  const isPublicBool = String(is_public) === "true" || is_public === true;
-  const securityBadge = isPublicBool ? "PUBLIC" : "INTERNAL";
-
-  let fileType = "LINK";
-  let fileUrl = link_url || "";
-  let fileSizeBytes = 0;
-
-  if (file) {
-    fileType = getFileType(path.extname(file.originalname));
-    fileUrl = path.relative(process.cwd(), file.path).replace(/\\/g, "/");
-    fileSizeBytes = file.size;
-  }
-
-  const normalizedTagNames = sanitizeTagNames(tags);
+  const isPublic = toBool(is_public);
+  const isLink = !file;
 
   try {
     await withTransaction(async (conn) => {
       const [insertResult] = await conn.query(
-        `INSERT INTO resources 
-          (public_id, title, description, file_type, file_url, file_size_bytes, is_public, security_badge, uploaded_by)
+        `INSERT INTO resources
+           (public_id, title, description, file_type, file_url, file_size_bytes, is_public, security_badge, uploaded_by)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           publicId,
-          String(title).trim(),
+          cleanTitle,
           description ? String(description).trim() : null,
-          fileType,
-          fileUrl,
-          fileSizeBytes,
-          isPublicBool,
-          securityBadge,
-          userId,
+          isLink ? "LINK" : getFileType(path.extname(file.originalname)),
+          isLink ? link_url : toStoredPath(file),
+          isLink ? null : file.size, // a link has no file size
+          isPublic,
+          resolveBadge(isPublic, null),
+          user.id,
         ],
       );
-
-      await syncResourceTags(conn, insertResult.insertId, normalizedTagNames);
+      await syncResourceTags(
+        conn,
+        insertResult.insertId,
+        sanitizeTagNames(tags),
+      );
     });
-
-    return {
-      public_id: publicId,
-      title: String(title).trim(),
-      description: description ? String(description).trim() : null,
-      file_type: fileType,
-      file_url: fileUrl,
-      file_size_bytes: fileSizeBytes,
-      is_public: isPublicBool,
-      security_badge: securityBadge,
-      download_count: 0,
-      tags: normalizedTagNames.map((name) => ({
-        id: null,
-        name,
-        color_hex: "#6366F1",
-      })),
-      uploaded_by: {
-        public_id: userPublicId,
-        username,
-        first_name: firstName,
-        last_name: lastName,
-        avatar_url: avatarUrl,
-      },
-      created_at: new Date().toISOString(),
-    };
   } catch (err) {
-    // Compensating action: unlink uploaded file if transaction fails
+    // Compensating action: the transaction failed, so the uploaded file must not stay on disk
     if (file?.path) await deleteLocalFile(file.path);
     throw err;
   }
+
+  return getResourceDto(publicId);
 }
 
 // ===========================================================================
@@ -338,96 +402,62 @@ export async function createResource({
 
 export async function updateResource(
   publicId,
-  { title, description, tags, is_public, file, link_url },
+  { title, description, tags, is_public, file, link_url } = {},
 ) {
-  const [existing] = await pool.query(
-    "SELECT id, public_id, title, description, file_url, is_public, security_badge FROM resources WHERE public_id = ?",
-    [publicId],
-  );
-
-  if (existing.length === 0) {
-    throw new AppError("Resource not found", 404, "NOT_FOUND");
-  }
-
-  const current = existing[0];
-  const oldFilePath = file ? current.file_url : null;
+  let fileToRemove = null;
 
   try {
     await withTransaction(async (conn) => {
-      const assignments = [];
-      const values = [];
+      // FOR UPDATE locks the row, so two simultaneous updates cannot overlap
+      const current = await findRow(publicId, conn, { forUpdate: true });
+      const changes = {};
 
-      if (title !== undefined) {
-        assignments.push("title = ?");
-        values.push(String(title).trim());
-      }
-
-      if (description !== undefined) {
-        assignments.push("description = ?");
-        values.push(description ? String(description).trim() : null);
-      }
+      if (title !== undefined) changes.title = String(title).trim();
+      if (description !== undefined)
+        changes.description = description ? String(description).trim() : null;
 
       if (is_public !== undefined) {
-        const isPublicBool = String(is_public) === "true" || is_public === true;
-        assignments.push("is_public = ?", "security_badge = ?");
-        values.push(isPublicBool, isPublicBool ? "PUBLIC" : "INTERNAL");
+        const nextPublic = toBool(is_public);
+        changes.is_public = nextPublic;
+        changes.security_badge = resolveBadge(
+          nextPublic,
+          current.security_badge,
+        );
       }
 
       if (file) {
-        assignments.push(
-          "file_url = ?",
-          "file_size_bytes = ?",
-          "file_type = ?",
-        );
-        values.push(
-          path.relative(process.cwd(), file.path).replace(/\\/g, "/"),
-          file.size,
-          getFileType(path.extname(file.originalname)),
-        );
-      } else if (link_url !== undefined) {
-        assignments.push("file_url = ?", "file_type = ?");
-        values.push(link_url, "LINK");
+        changes.file_type = getFileType(path.extname(file.originalname));
+        changes.file_url = toStoredPath(file);
+        changes.file_size_bytes = file.size;
+      } else if (link_url) {
+        changes.file_type = "LINK";
+        changes.file_url = link_url;
+        changes.file_size_bytes = null;
       }
 
-      if (assignments.length > 0) {
-        values.push(current.id);
-        await conn.query(
-          `UPDATE resources SET ${assignments.join(", ")} WHERE id = ?`,
-          values,
-        );
-      }
+      // The old stored file is replaced by a new file OR by a link: either way it must be deleted
+      if ((file || link_url) && current.file_type !== "LINK")
+        fileToRemove = current.file_url;
 
-      if (tags !== undefined) {
+      const keys = Object.keys(changes);
+      if (keys.length > 0) {
+        const setSql = keys.map((col) => `${col} = ?`).join(", ");
+        const values = [...Object.values(changes), current.id];
+        await conn.query(`UPDATE resources SET ${setSql} WHERE id = ?`, values);
+      }
+      if (tags !== undefined)
         await syncResourceTags(conn, current.id, sanitizeTagNames(tags));
-      }
     });
-
-    // Cleanup replaced physical file only after successful database commit
-    if (oldFilePath) {
-      await deleteLocalFile(oldFilePath);
-    }
-
-    return {
-      public_id: current.public_id,
-      title: title !== undefined ? String(title).trim() : current.title,
-      description:
-        description !== undefined ? description : current.description,
-      is_public:
-        is_public !== undefined
-          ? String(is_public) === "true" || is_public === true
-          : Boolean(current.is_public),
-      security_badge:
-        is_public !== undefined
-          ? String(is_public) === "true" || is_public === true
-            ? "PUBLIC"
-            : "INTERNAL"
-          : current.security_badge,
-    };
   } catch (err) {
-    // Compensating action: discard newly uploaded file on failure
+    // Compensating action: discard the newly uploaded file
     if (file?.path) await deleteLocalFile(file.path);
     throw err;
   }
+
+  // Only after the database commit succeeded is the replaced file deleted
+  if (fileToRemove) await deleteLocalFile(fileToRemove);
+
+  return getResourceDto(publicId);
 }
 
 // ===========================================================================
@@ -435,24 +465,13 @@ export async function updateResource(
 // ===========================================================================
 
 export async function deleteResource(publicId) {
-  const [rows] = await pool.query(
-    "SELECT id, file_url FROM resources WHERE public_id = ?",
-    [publicId],
-  );
+  const row = await findRow(publicId);
 
-  if (rows.length === 0) {
-    throw new AppError("Resource not found", 404, "NOT_FOUND");
-  }
+  // One statement is already atomic; resource_tags rows are removed by ON DELETE CASCADE
+  await pool.query("DELETE FROM resources WHERE id = ?", [row.id]);
 
-  const resource = rows[0];
-
-  await withTransaction(async (conn) => {
-    // Delete parent entity; database constraints handle junction cascade
-    await conn.query("DELETE FROM resources WHERE id = ?", [resource.id]);
-  });
-
-  // Safe file removal after successful database commit
-  await deleteLocalFile(resource.file_url);
+  // Links have no file on disk
+  if (row.file_type !== "LINK") await deleteLocalFile(row.file_url);
   return true;
 }
 
@@ -461,55 +480,59 @@ export async function deleteResource(publicId) {
 // ===========================================================================
 
 export async function getResourceForDownload(publicId) {
-  const [rows] = await pool.query(
-    "SELECT id, public_id, title, file_url, file_type FROM resources WHERE public_id = ?",
-    [publicId],
-  );
+  const row = await findRow(publicId);
 
-  if (rows.length === 0) {
-    throw new AppError("Resource not found", 404, "NOT_FOUND");
-  }
-
-  const resource = rows[0];
-
-  // Atomic download increment
+  // Atomic increment: the database adds 1 itself, so simultaneous downloads are never lost
   await pool.query(
     "UPDATE resources SET download_count = download_count + 1 WHERE id = ?",
-    [resource.id],
+    [row.id],
   );
 
-  return resource;
+  return {
+    id: row.id,
+    public_id: row.public_id,
+    title: row.title,
+    file_url: row.file_url,
+    file_type: row.file_type,
+  };
 }
 
 // ===========================================================================
 // Developer 3 (Admin Visibility Matrix) Shared Services
 // ===========================================================================
 
-export async function listResourceVisibility({ page = 1, perPage = 20 }) {
+export async function listResourceVisibility({ page = 1, perPage = 20 } = {}) {
   const pageNumber = Math.max(1, parseInt(page, 10) || 1);
-  const pageSize = Math.max(1, parseInt(perPage, 10) || 20);
+  const pageSize = Math.min(100, Math.max(1, parseInt(perPage, 10) || 20));
   const offset = (pageNumber - 1) * pageSize;
 
-  const [items] = await pool.query(
-    `SELECT public_id AS id, 'resource' AS type, title, description, is_public, updated_at 
-     FROM resources ORDER BY updated_at DESC LIMIT ? OFFSET ?`,
-    [pageSize, offset],
-  );
+  const [[items], [countResult]] = await Promise.all([
+    pool.query(
+      `SELECT public_id AS id, 'resource' AS type, title, description, is_public, updated_at
+         FROM resources ORDER BY updated_at DESC, id DESC LIMIT ? OFFSET ?`,
+      [pageSize, offset],
+    ),
+    pool.query("SELECT COUNT(*) AS total FROM resources"),
+  ]);
 
-  const [countResult] = await pool.query(
-    "SELECT COUNT(*) AS total FROM resources",
-  );
-  return { page: pageNumber, total: countResult[0]?.total ?? 0, items };
+  return {
+    page: pageNumber,
+    total: countResult[0]?.total ?? 0,
+    items: items.map((item) => ({
+      ...item,
+      is_public: Boolean(item.is_public),
+    })),
+  };
 }
 
+// Bulk switch. A stricter badge (RESTRICTED) is never lost when going private.
 export async function setAllResourcesVisibility(isPublic) {
-  const isPublicBool = Boolean(isPublic);
-  const badge = isPublicBool ? "PUBLIC" : "INTERNAL";
-
+  const makePublic = toBool(isPublic);
   const [result] = await pool.query(
-    "UPDATE resources SET is_public = ?, security_badge = ?",
-    [isPublicBool, badge],
+    `UPDATE resources
+        SET is_public = ?,
+            security_badge = IF(?, 'PUBLIC', IF(security_badge = 'PUBLIC', 'INTERNAL', security_badge))`,
+    [makePublic, makePublic],
   );
-
   return { updated: result.affectedRows };
 }

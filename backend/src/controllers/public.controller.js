@@ -17,12 +17,14 @@ const fail = (details) => {
 
 // Query values can be strings, arrays (?a=1&a=2) or objects (?a[b]=1): normalise to a list of strings
 const toList = (value) =>
+  //ከሊንክ መጨረሻ የሚመጡ ልዩ ልዩ የማጣሪያ መረጃዎችን ወደ አንድ ወጥ የጽሑፍ ሊስት (Array of Strings) የሚቀይር እጅግ ብልህ ተግባር ነው።
   []
     .concat(value ?? [])
     .flatMap((v) => (typeof v === "string" ? v.split(",") : [String(v)]))
     .map((v) => v.trim())
     .filter(Boolean);
 
+    // የእንግዳ ማጣሪያ መርማሪ (parseQuery)
 function parseQuery(query = {}) {
   const requested = toList(query.sections).map((s) => s.toLowerCase());
   const unknown = requested.filter((s) => !SECTIONS.includes(s));

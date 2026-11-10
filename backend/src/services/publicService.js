@@ -10,6 +10,46 @@ const AWAY_SECONDS = 15 * 60; //    away:   active within 15 minutes  (API doc),
 const MAX_TASKS = 200;
 const MAX_TEAM_MEMBERS = 100;
 
+// Words InnoDB does not index ("the", "with", "from" ...). Requiring one of them with "+" would
+// make a search like "the guide" find nothing, so they are left out of the FULLTEXT query.
+const FULLTEXT_STOPWORDS = new Set([
+  "a",
+  "about",
+  "an",
+  "are",
+  "as",
+  "at",
+  "be",
+  "by",
+  "com",
+  "de",
+  "en",
+  "for",
+  "from",
+  "how",
+  "i",
+  "in",
+  "is",
+  "it",
+  "la",
+  "of",
+  "on",
+  "or",
+  "that",
+  "the",
+  "this",
+  "to",
+  "und",
+  "was",
+  "what",
+  "when",
+  "where",
+  "who",
+  "will",
+  "with",
+  "www",
+]);
+
 // Table and column names for tags come from this fixed map, never from user input.
 const TAG_LINKS = {
   resources: { table: "resource_tags", column: "resource_id" },
@@ -47,10 +87,17 @@ function buildResourceFilters({ q, tags }) {
       .replace(/[+\-<>()~*"@]/g, " ")
       .split(/\s+/)
       .filter(Boolean);
-    if (tokens.length && tokens.every((t) => t.length >= 3)) {
+    const searchTokens = tokens.filter(
+      (t) => !FULLTEXT_STOPWORDS.has(t.toLowerCase()),
+    );
+    if (
+      tokens.length &&
+      tokens.every((t) => t.length >= 3) &&
+      searchTokens.length
+    ) {
       // uses the FULLTEXT index idx_ft_resources (it only indexes words of 3+ letters)
       where.push("MATCH(r.title, r.description) AGAINST (? IN BOOLEAN MODE)");
-      params.push(tokens.map((t) => `+${t}*`).join(" "));
+      params.push(searchTokens.map((t) => `+${t}*`).join(" "));
     } else {
       // short searches: LIKE, with % and _ escaped so "%" means a literal percent sign
       const like = `%${q.replace(/[\\%_]/g, "\\$&")}%`;

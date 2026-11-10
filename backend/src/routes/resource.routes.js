@@ -1,12 +1,6 @@
 import { Router } from "express";
-import {
-  authenticate,
-  requirePermission,
-} from "../middlewares/authMiddleware.js";
-import {
-  uploadResourceFile,
-  handleUploadError,
-} from "../middlewares/uploadMiddleware.js";
+import { authenticate,requirePermission,} from "../middlewares/authMiddleware.js";
+import {uploadResourceFile, handleUploadError,} from "../middlewares/uploadMiddleware.js";
 import * as ctrl from "../controllers/resource.controller.js";
 
 const router = Router();

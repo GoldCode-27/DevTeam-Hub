@@ -62,7 +62,7 @@ const parseBoolean = (value) => {
   if (text === "false" || text === "0") return false;
   return null; // invalid
 };
-
+// Http url checker  
 const toHttpUrl = (value) => {
   try {
     const url = new URL(String(value));
@@ -133,6 +133,7 @@ const parseResourceFields = (body = {}, file, { partial = false } = {}) => {
   if (errors.length) fail(errors);
   return out;
 };
+//የዝርዝር ፍለጋ ማጣሪያ መርማሪ (parseListQuery)
 
 const parseListQuery = (query = {}) => {
   const out = {
