@@ -189,13 +189,31 @@ export const createResource = withUploadCleanup(async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// T22: Update a resource
+// T22: Update a resource 
 // ---------------------------------------------------------------------------
 export const updateResource = withUploadCleanup(async (req, res) => {
   const id = getId(req);
   const fields = parseResourceFields(req.body, req.file, { partial: true });
 
-  // Switching public/private needs its own permission
+  // 1. የይዘት ለውጥ (ርዕስ፣ መግለጫ፣ ታግ፣ ሊንክ ወይም አዲስ ፋይል) መኖሩን ማረጋገጫ
+  const hasContentEdits =
+    fields.title !== undefined ||
+    fields.description !== undefined ||
+    fields.tags !== undefined ||
+    fields.link_url !== undefined ||
+    Boolean(req.file);
+
+  // ይዘት እየቀየረ ከሆነ፦ የግድ 'resource:update' ወይም 'user:manage' (አድሚን) ሊኖረው ይገባል!
+  if (hasContentEdits && !can(req.user, "resource:update", "user:manage")) {
+    throw new AppError(
+      "Forbidden: missing resource:update permission",
+      403,
+      "FORBIDDEN",
+    );
+  }
+
+  // 2. የ Public/Private (is_public) ለውጥ እየተደረገ ከሆነ፦
+  // የግድ 'resource:toggle_visibility' ወይም 'user:manage' (አድሚን) ሊኖረው ይገባል!
   if (
     fields.is_public !== undefined &&
     !can(req.user, "resource:toggle_visibility", "user:manage")
@@ -207,6 +225,7 @@ export const updateResource = withUploadCleanup(async (req, res) => {
     );
   }
 
+  // ወደ ዳታቤዝ ሰርቪስ ይላካል
   res.json(
     await resourceService.updateResource(id, { ...fields, file: req.file }),
   );

@@ -3,8 +3,14 @@ import path from "node:path";
 import db from "../config/db.js";
 import AppError from "../utils/appError.js";
 import { getFileType, deleteLocalFile } from "../utils/storage.js";
+// ማስተካከያ 1፡ Dev 1 የሰራውን logActivity ረዳት ፈንክሽን እዚህ እናመጣለን
+import { logActivity } from "../utils/activityLogger.js";
 
-const pool = db.pool;
+import { getPagination } from "../utils/pagination.js"; 
+
+
+// safeQuery እና poolን ከ db.js እናወጣለን
+const { pool, safeQuery } = db;
 
 const APP_URL = (process.env.APP_URL ?? "http://localhost:8080").replace(
   /\/$/,
@@ -211,11 +217,11 @@ function toResourceDto(row, tags = []) {
 
 /** Reads one resource back from the database (so responses always show the real saved data). */
 async function getResourceDto(publicId) {
-  const [rows] = await pool.query(
+  const rows = await safeQuery(
     `${SELECT_RESOURCE} WHERE r.public_id = ? LIMIT 1`,
     [publicId],
   );
-  if (rows.length === 0)
+  if (!rows||rows.length === 0)
     throw new AppError("Resource not found", 404, "NOT_FOUND");
   const tagsByResourceId = await fetchTagsForResourceBatch([rows[0].id]);
   return toResourceDto(rows[0], tagsByResourceId.get(rows[0].id) ?? []);
@@ -275,54 +281,56 @@ function buildListFilters({ q, tags, visibility }) {
 }
 
 // ===========================================================================
-// T20: List Resources
+// T20: List Resources (በብሬስ { } ውስጥ ተስተካክሎ የቀረበ)
 // ===========================================================================
 
 export async function listResources({
   q,
   tags,
   visibility,
-  page = 1,
-  per_page = 20,
+  page,
+  per_page,
 } = {}) {
-  const pageNumber = Math.max(1, parseInt(page, 10) || 1);
-  const pageSize = Math.min(100, Math.max(1, parseInt(per_page, 10) || 20));
-  const offset = (pageNumber - 1) * pageSize;
+  // 1. page እና per_pageን ለ getPagination እንሰጣለን
+  const { page: pageNumber, limit, offset } = getPagination({ page, per_page }, 20, 100);
 
   const search = q ? String(q).trim().slice(0, 100) : "";
-  //የማጣሪያ ህግ መገንቢያ (Filter Generation)
+
+  // 2. የማጣሪያ ህግ መገንቢያ (q, tags, visibility በቀጥታ ይጠራሉ)
   const { whereClause, params } = buildListFilters({
     q: search,
     tags: sanitizeTagNames(tags),
     visibility,
   });
 
-  // the three independent queries run at the same time
+  // 3. ሦስቱ ገለልተኛ ጥያቄዎች በአንድ ላይ ይሰራሉ
   const [[countRows], [resources], [allAvailableTags]] = await Promise.all([
-    //የመጀመሪያው ጥያቄ (የፋይሎች ብዛት መቁጠሪያ)
+    // ሀ) የፋይሎች ብዛት
     pool.query(
       `SELECT COUNT(r.id) AS total FROM resources r WHERE ${whereClause}`,
       params,
     ),
-    //ሁለተኛው ጥያቄ (ትክክለኛዎቹን ፋይሎች ማምጫ)
+    // ለ) ትክክለኛዎቹን ፋይሎች በ limit እና offset ገድቦ ማምጣት
     pool.query(
       `${SELECT_RESOURCE}
         WHERE ${whereClause}
         ORDER BY r.created_at DESC, r.id DESC
         LIMIT ? OFFSET ?`,
-      [...params, pageSize, offset],
+      [...params, limit, offset],
     ),
-    //ሶስተኛው ጥያቄ (ሁሉንም የሚገኙ መለያዎችን ማምጫ)
+    // ሐ) ያሉትን ታጎች በሙሉ ማምጣት
     pool.query("SELECT id, name, color_hex FROM tags ORDER BY name ASC"),
   ]);
 
+  // 4. ታጎችን መጫን
   const tagsByResourceId = await fetchTagsForResourceBatch(
     resources.map((r) => r.id),
   );
 
+  // 5. ውጤቱን መመለስ
   return {
     page: pageNumber,
-    per_page: pageSize,
+    per_page: limit,
     total: countRows[0]?.total ?? 0,
     resources: resources.map((r) =>
       toResourceDto(r, tagsByResourceId.get(r.id) ?? []),
@@ -330,7 +338,6 @@ export async function listResources({
     meta: { tags: allAvailableTags },
   };
 }
-
 // ===========================================================================
 // T21: Add Resource
 // ===========================================================================
@@ -387,6 +394,16 @@ export async function createResource({
         sanitizeTagNames(tags),
       );
     });
+
+    // ማስተካከያ፡ ትራንዛክሽኑ ከተሳካ በኋላ ዳሽቦርዱ እንዲያየው Activity እንመዘግባለን
+    await logActivity({
+      actorId: user.id,
+      type: "RESOURCE_ADDED",
+      entityType: "RESOURCE",
+      entityRef: publicId,
+      summary: `uploaded resource "${cleanTitle}"`,
+    });
+
   } catch (err) {
     // Compensating action: the transaction failed, so the uploaded file must not stay on disk
     if (file?.path) await deleteLocalFile(file.path);
@@ -468,7 +485,7 @@ export async function deleteResource(publicId) {
   const row = await findRow(publicId);
 
   // One statement is already atomic; resource_tags rows are removed by ON DELETE CASCADE
-  await pool.query("DELETE FROM resources WHERE id = ?", [row.id]);
+  await safeQuery("DELETE FROM resources WHERE id = ?", [row.id]);
 
   // Links have no file on disk
   if (row.file_type !== "LINK") await deleteLocalFile(row.file_url);
@@ -483,7 +500,7 @@ export async function getResourceForDownload(publicId) {
   const row = await findRow(publicId);
 
   // Atomic increment: the database adds 1 itself, so simultaneous downloads are never lost
-  await pool.query(
+  await safeQuery(
     "UPDATE resources SET download_count = download_count + 1 WHERE id = ?",
     [row.id],
   );
@@ -501,11 +518,13 @@ export async function getResourceForDownload(publicId) {
 // Developer 3 (Admin Visibility Matrix) Shared Services
 // ===========================================================================
 
-export async function listResourceVisibility({ page = 1, perPage = 20 } = {}) {
-  const pageNumber = Math.max(1, parseInt(page, 10) || 1);
-  const pageSize = Math.min(100, Math.max(1, parseInt(perPage, 10) || 20));
-  const offset = (pageNumber - 1) * pageSize;
-
+export async function listResourceVisibility(page, per_page = {}) {
+  const {
+    page: pageNumber,
+    limit: pageSize,
+    offset,
+  } = getPagination({ page, per_page: per_page || perPage }, 20, 100);
+  // 2. መረጃዎችን በ limit እና offset ማምጣት
   const [[items], [countResult]] = await Promise.all([
     pool.query(
       `SELECT public_id AS id, 'resource' AS type, title, description, is_public, updated_at
@@ -514,7 +533,7 @@ export async function listResourceVisibility({ page = 1, perPage = 20 } = {}) {
     ),
     pool.query("SELECT COUNT(*) AS total FROM resources"),
   ]);
-
+  // 3. ውጤቱን መመለስ
   return {
     page: pageNumber,
     total: countResult[0]?.total ?? 0,

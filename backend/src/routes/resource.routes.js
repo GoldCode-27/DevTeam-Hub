@@ -6,7 +6,7 @@ import * as ctrl from "../controllers/resource.controller.js";
 const router = Router();
 
 // ===========================================================================
-// All resource management routes strictly require authentication
+// All resource management routes strictly require authentication(ሁሉም የሪሶርስ ስራዎች ሎጊን መደረግ አለባቸው) 
 // ===========================================================================
 router.use(authenticate);
 
@@ -25,7 +25,7 @@ router.post(
 // T22: Update a resource (Fields, tags, file, and is_public toggle)
 router.patch(
   "/:id",
-  requirePermission("resource:update"),
+  requirePermission(["resource:update", "resource:toggle_visibility"], falseእ),
   uploadResourceFile.single("file"),
   handleUploadError, // Intercepts 10MB file limit errors cleanly
   ctrl.updateResource,
