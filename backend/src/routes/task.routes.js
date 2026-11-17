@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { authenticate, requirePermission } from "../middlewares/authMiddleware.js";
-import * as ctrl from "../controllers/task.controller.js";
+import * as ctrl from "../controllers/taskController.js";
 
 const router = Router();
 
