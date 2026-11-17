@@ -11,6 +11,9 @@ import publicRoutes from "./public.routes.js";
 import fileRoutes from "./file.routes.js";
 import testUploadRoutes from "./testUpload.routes.js";
 
+import taskRoutes from "./task.routes.js";
+import webhookRoutes from "./webhook.routes.js";
+
 // Create a main router instance to aggregate all modular API routes
 const router = express.Router();
 
@@ -55,6 +58,9 @@ router.use("/files", fileRoutes);
 router.use("/", testUploadRoutes);
 // Export the master router to be mounted into the main server application
 
+
+router.use("/tasks", taskRoutes);
+router.use("/webhooks", webhookRoutes);
 export default router;
 
 
