@@ -1,10 +1,10 @@
-import safeQuery from '../config/db.js';
+import db from "../config/db.js";
 
 /**
  * Helper: Generate next unique task code (e.g. DEV-105)
  */
 export const generateTaskCode = async () => {
-    const [rows] = await safeQuery(
+    const rows = await db.safeQuery(
         'SELECT task_code FROM tasks ORDER BY id DESC LIMIT 1'
     );
     if (!rows || rows.length === 0) {
@@ -45,11 +45,11 @@ export const listTasks = async (filters) => {
 
     query += ` ORDER BY t.status, t.position ASC`;
 
-    const tasks = await safeQuery(query, params);
+    const tasks = await db.safeQuery(query, params);
     const grouped = { UNDONE: [], IN_PROGRESS: [], COMPLETED: [] };
 
     for (const task of tasks) {
-        const tags = await safeQuery(`
+        const tags = await db.safeQuery(`
             SELECT tg.id, tg.name, tg.color_hex 
             FROM task_tags tt 
             JOIN tags tg ON tt.tag_id = tg.id 
@@ -86,7 +86,7 @@ export const listTasks = async (filters) => {
  * T27: Get task detail by code (DEV-101)
  */
 export const getTaskDetail = async (taskCode) => {
-    const [tasks] = await safeQuery(`
+    const [tasks] = await db.safeQuery(`
         SELECT t.*, 
                u_assignee.public_id as a_pub, u_assignee.username as a_usr, u_assignee.first_name as a_fn, u_assignee.last_name as a_ln, u_assignee.avatar_url as a_av,
                u_creator.public_id as c_pub, u_creator.username as c_usr, u_creator.first_name as c_fn, u_creator.last_name as c_ln, u_creator.avatar_url as c_av
@@ -99,13 +99,13 @@ export const getTaskDetail = async (taskCode) => {
     if (!tasks || tasks.length === 0) return null;
     const task = tasks;
 
-    const subtasks = await safeQuery(
+    const subtasks = await db.safeQuery(
         'SELECT id, title, is_done FROM subtasks WHERE task_id = ? ORDER BY position ASC',
         [task.id]
     );
     const doneCount = subtasks.filter(s => s.is_done).length;
 
-    const comments = await safeQuery(`
+    const comments = await db.safeQuery(`
         SELECT tc.id, tc.content, tc.created_at,
                u.public_id, u.username, u.first_name, u.last_name, u.avatar_url
         FROM task_comments tc
@@ -114,7 +114,7 @@ export const getTaskDetail = async (taskCode) => {
         ORDER BY tc.created_at ASC
     `, [task.id]);
 
-    const githubEvents = await safeQuery(
+    const githubEvents = await db.safeQuery(
         'SELECT event_type, external_ref, repository_name, action, title, author_username, url FROM task_github_events WHERE task_id = ?',
         [task.id]
     );
@@ -158,7 +158,7 @@ export const createTask = async (userId, data) => {
     const taskCode = await generateTaskCode();
     const position = 65535.0000;
 
-    const result = await safeQuery(`
+    const result = await db.safeQuery(`
         INSERT INTO tasks (task_code, title, description, status, priority, is_public, position, due_date, assignee_id, created_by)
         VALUES (?, ?, ?, 'UNDONE', ?, ?, ?, ?, ?, ?)
     `, [
@@ -177,7 +177,7 @@ export const createTask = async (userId, data) => {
 
     if (data.subtasks && Array.isArray(data.subtasks)) {
         for (const subTitle of data.subtasks) {
-            await safeQuery(
+            await db.safeQuery(
                 'INSERT INTO subtasks (task_id, title, is_done) VALUES (?, ?, false)',
                 [taskId, subTitle]
             );
@@ -191,7 +191,7 @@ export const createTask = async (userId, data) => {
  * T29: Update, move or change a task (Fractional Indexing)
  */
 export const updateTask = async (taskCode, data) => {
-    const [tasks] = await safeQuery('SELECT id, status, position FROM tasks WHERE task_code = ?', [taskCode]);
+    const [tasks] = await db.safeQuery('SELECT id, status, position FROM tasks WHERE task_code = ?', [taskCode]);
     if (!tasks || tasks.length === 0) return null;
     const task = tasks;
 
@@ -202,11 +202,11 @@ export const updateTask = async (taskCode, data) => {
         let afterPos = null;
 
         if (data.before_task_code) {
-            const [bRows] = await safeQuery('SELECT position FROM tasks WHERE task_code = ?', [data.before_task_code]);
+            const [bRows] = await db.safeQuery('SELECT position FROM tasks WHERE task_code = ?', [data.before_task_code]);
             if (bRows && bRows.length) beforePos = parseFloat(bRows.position);
         }
         if (data.after_task_code) {
-            const [aRows] = await safeQuery('SELECT position FROM tasks WHERE task_code = ?', [data.after_task_code]);
+            const [aRows] = await db.safeQuery('SELECT position FROM tasks WHERE task_code = ?', [data.after_task_code]);
             if (aRows && aRows.length) afterPos = parseFloat(aRows.position);
         }
 
@@ -226,7 +226,7 @@ export const updateTask = async (taskCode, data) => {
         completedAtQuery = ', completed_at = NULL';
     }
 
-    await safeQuery(`
+   await db.safeQuery(`
         UPDATE tasks 
         SET title = COALESCE(?, title),
             description = COALESCE(?, description),
@@ -239,13 +239,13 @@ export const updateTask = async (taskCode, data) => {
             ${completedAtQuery}
         WHERE task_code = ?
     `, [
-        data.title,
-        data.description,
-        data.status,
-        data.priority,
+        data.title !== undefined ? data.title : null,
+        data.description !== undefined ? data.description : null,
+        data.status !== undefined ? data.status : null,
+        data.priority !== undefined ? data.priority : null,
         data.is_public !== undefined ? (data.is_public ? 1 : 0) : null,
-        data.due_date,
-        data.assignee_id,
+        data.due_date !== undefined ? data.due_date : null,
+        data.assignee_id !== undefined ? data.assignee_id : null,
         newPosition,
         taskCode
     ]);
@@ -253,17 +253,17 @@ export const updateTask = async (taskCode, data) => {
     if (data.subtasks) {
         if (data.subtasks.add && Array.isArray(data.subtasks.add)) {
             for (const subTitle of data.subtasks.add) {
-                await safeQuery('INSERT INTO subtasks (task_id, title, is_done) VALUES (?, ?, false)', [task.id, subTitle]);
+                await db.safeQuery('INSERT INTO subtasks (task_id, title, is_done) VALUES (?, ?, false)', [task.id, subTitle]);
             }
         }
         if (data.subtasks.update && Array.isArray(data.subtasks.update)) {
             for (const sub of data.subtasks.update) {
-                await safeQuery('UPDATE subtasks SET is_done = ? WHERE id = ? AND task_id = ?', [sub.is_done ? 1 : 0, sub.id, task.id]);
+                await db.safeQuery('UPDATE subtasks SET is_done = ? WHERE id = ? AND task_id = ?', [sub.is_done ? 1 : 0, sub.id, task.id]);
             }
         }
         if (data.subtasks.remove && Array.isArray(data.subtasks.remove)) {
             for (const subId of data.subtasks.remove) {
-                await safeQuery('DELETE FROM subtasks WHERE id = ? AND task_id = ?', [subId, task.id]);
+                await db.safeQuery('DELETE FROM subtasks WHERE id = ? AND task_id = ?', [subId, task.id]);
             }
         }
     }
@@ -275,9 +275,9 @@ export const updateTask = async (taskCode, data) => {
  * T30: Delete a task
  */
 export const deleteTask = async (taskCode) => {
-    const [tasks] = await safeQuery('SELECT id FROM tasks WHERE task_code = ?', [taskCode]);
+    const [tasks] = await db.safeQuery('SELECT id FROM tasks WHERE task_code = ?', [taskCode]);
     if (!tasks || tasks.length === 0) return false;
 
-    await safeQuery('DELETE FROM tasks WHERE task_code = ?', [taskCode]);
+    await db.safeQuery('DELETE FROM tasks WHERE task_code = ?', [taskCode]);
     return true;
 };
