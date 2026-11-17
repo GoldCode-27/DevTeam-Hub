@@ -1,5 +1,5 @@
 import { Router } from "express";
-import * as ctrl from "../controllers/github.controller.js";
+import * as ctrl from "../controllers/githubController.js";
 
 const router = Router();
 
